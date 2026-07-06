@@ -197,4 +197,51 @@ Wrapper now captures output, checks `$LASTEXITCODE`, throws on non-zero. `-AtLea
 
 ### Result: APPROVED & MERGED (6ba071e). Loop advanced to M5 (user documentation — the last automated milestone; M6 is human-only).
 
+## Iteration 1-3 — M5: docs/user-guide.md — APPROVED & MERGED (913172c) — LOOP COMPLETE
+
+**Date:** 2026-07-06
+**Milestone:** M5 (operator user guide — final automated milestone)
+**Work item:** Write docs/user-guide.md for an operator who has never seen the repo. Gate: doc-coverage test (every config key + every script param + all 7 sections present) AND Realist review.
+
+### Iteration 1 (Engineer, Sonnet)
+Wrote the 7-section guide (Prerequisites, Install, Setup, Configure, First deployment, Troubleshooting, Maintenance). Configure table covers all 6 top-level + 27 nested config keys and all 4 script params (Mode, Force, ConfigPath, LogPath) with example invocations. Wove in the work-box D:\SmartDeploy reality as a per-site Share.Path/Sync.Source decision. Doc-coverage test 3/3 green on first pass.
+
+### Iteration 1 Realist verdict (Sonnet): **REJECT** — 4 findings (operator-time correctness)
+1. F1/F4 — TinyPXE Server install undocumented / hand-wavy: guide invoked pxe-fallback.ps1 + Start-Service but never told the operator to download+extract pxesrv.exe to the config'd path.
+2. F2 — **boot.wim never staged**: Copy-SecureBootFiles stages bootmgfw.efi + boot.sdi but NOT the WIM the BCD ramdisk-boots; operator must place C:\TinyPXE\files\Boot\boot.wim manually or the target dies with a WinPE boot error. Only mentioned under Maintenance, not as a first-time step.
+3. F3 — no validate.ps1 expected-output transcript (only setup.ps1 had one).
+
+**Arbiter adjudication:** upheld all four. Ruled boot.wim/TinyPXE are operator-supplied artifacts → document, do NOT change merged M4 code. Told Engineer not to fabricate a deep download URL (name the official TinyPXE source + exact extract/verify commands).
+
+### Iteration 2 (Engineer, Sonnet)
+Added a fallback-only TinyPXE prerequisite + troubleshooting install steps (official source, Expand-Archive, Test-Path verify), a first-time boot.wim staging step (Copy-Item to the TftpRoot\Boot path, with the failure-mode explanation), and a verbatim passing validate.ps1 transcript + a FAIL example. Arbiter spot-checked the transcript strings against validate.ps1's real Write-Log calls — verbatim match.
+
+### Iteration 2 Realist verdict (Sonnet): **REJECT** — 2 new holistic findings
+Both `.\validate.ps1` (First deployment Step 1) and `.\pxe-fallback.ps1 -Mode Field` (Secure-Boot troubleshooting Step 2) were invoked with no preceding `Set-Location`; a fresh elevated prompt (the real M6 pattern) would fail path-not-found. Install/Maintenance sections had the `Set-Location C:\PXEForge\src` guard; these two didn't. (Plus a minor boot.sdi-location imprecision, non-blocking.)
+
+### Iteration 3 (Arbiter direct fix)
+Added `Set-Location C:\PXEForge\src` before both invocations (matching the in-doc pattern) and refined the boot.sdi note (`lands under \Boot`). Doc-coverage still 3/3, full suite 101/101.
+
+### Iteration 3 Realist verdict (Sonnet): **APPROVE** — both commands now run from a fresh prompt, boot.sdi note accurate, no regression, scope docs-only.
+
+### Merge checklist — ALL PASS
+- [x] Doc-coverage test 3/3 (every config key + every param + all 7 sections).
+- [x] Full Pester suite 101 passed / 0 failed / 0 skipped (the Docs Describe now active).
+- [x] PSSA -Severity Error CLEAN (no scripts touched).
+- [x] Realist verdict APPROVE.
+- [x] Scope docs/user-guide.md only.
+- [x] Commit `M5: docs/user-guide.md operator documentation [council-approved]` → **913172c**.
+
+### Result: APPROVED & MERGED (913172c). **M5 is the final automated milestone — the council loop is COMPLETE.**
+
+---
+
+## LOOP STOP — AWAITING_HUMAN (M6)
+
+Per the CLAUDE.md contract, M6 is **human-only**: the loop stops at M5 and writes `AWAITING_HUMAN` to loop-state.json. All five automated milestones (M1-M5) are council-approved, gate-green, committed, and pushed to main.
+
+**M6 is Brian's to run:** follow docs/user-guide.md verbatim on the Windows Pro box, then PXE-boot a test laptop. Any step where the guide is unclear or wrong is itself a finding to feed back into the loop. Before running setup.ps1 on the work box, reconcile config.psd1 `Share.Path`/`Sync.Source` against the real D:\SmartDeploy layout — see [[pxeforge-work-box-layout]].
+
+Milestones delivered: M1 (config + setup skeleton) 0ef8eba · M2 (setup.ps1 full) d4a434e · M3 (sync-images + validate) 5b22010 · M4 (Tiny PXE Secure-Boot fallback) 6ba071e · M5 (user guide) 913172c.
+
 **Side note (user, 2026-07-05):** Brian builds at home, runs on a work PC where C:=OS and D: holds SmartDeploy data in a folder literally named `SmartDeploy` (`D:\SmartDeploy`). Recorded to memory [[pxeforge-work-box-layout]]; reconcile `Share.Path`/`Sync.Source` in config.psd1 at install time (all config-driven, no code change) and cover in the M5 guide.

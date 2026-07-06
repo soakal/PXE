@@ -1,1 +1,1 @@
-{ "milestone": "M5", "workItem": "User documentation: docs/user-guide.md (7 required sections, every config.psd1 key + every script param documented)", "iteration": 0, "status": "active" }
+{ "milestone": "M6", "workItem": "Manual hardware validation — Brian follows docs/user-guide.md verbatim on the Pro box and PXE-boots a test laptop. Any unclear/wrong guide step is itself a finding.", "iteration": 0, "status": "AWAITING_HUMAN" }
