@@ -129,18 +129,18 @@ function Test-ServiceState {
     return $false
 }
 
-# Check 4: Exactly one ISO is present in the iVentoy ISO directory.
+# Check 4: At least one ISO is present in the iVentoy ISO directory.
 function Test-IsoPresent {
     [CmdletBinding()]
     param()
     $isoDir = $script:Config.IVentoy.IsoDir
     $isos   = @(Get-ChildItem -Path $isoDir -Filter '*.iso' -ErrorAction SilentlyContinue)
     $count  = $isos.Count
-    if ($count -eq 1) {
-        Write-Log "PASS: Exactly 1 ISO present in '$isoDir'." 'SUCCESS'
+    if ($count -ge 1) {
+        Write-Log "PASS: $count ISO(s) present in '$isoDir'." 'SUCCESS'
         return $true
     }
-    Write-Log "FAIL: ISO count is $count (expected exactly 1) in '$isoDir'." 'ERROR'
+    Write-Log "FAIL: No ISO present in '$isoDir' (expected at least 1)." 'ERROR'
     return $false
 }
 

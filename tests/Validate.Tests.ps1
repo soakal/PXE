@@ -128,7 +128,7 @@ Describe 'Test-ServiceState' {
     }
 }
 
-# ── Check 4: Exactly one ISO present ─────────────────────────────────────────
+# ── Check 4: At least one ISO present ────────────────────────────────────────
 Describe 'Test-IsoPresent' {
     BeforeAll {
         . $script:ValidatePath
@@ -149,14 +149,14 @@ Describe 'Test-IsoPresent' {
         Test-IsoPresent | Should -BeFalse
     }
 
-    It 'returns false when more than one ISO is present (FAIL — 2 ISOs)' {
+    It 'returns true when more than one ISO is present (PASS — 2 ISOs)' {
         Mock Get-ChildItem {
             @(
                 [PSCustomObject]@{ Name = 'SmartPE.iso' },
                 [PSCustomObject]@{ Name = 'SmartPE-old.iso' }
             )
         }
-        Test-IsoPresent | Should -BeFalse
+        Test-IsoPresent | Should -BeTrue
     }
 
     It 'calls Get-ChildItem exactly once per run' {
