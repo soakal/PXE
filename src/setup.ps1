@@ -11,8 +11,12 @@
     script is implemented by the council loop across milestones M1-M2.
 
 .PARAMETER Mode
-    Lan (default): iVentoy in ExternalNet DHCP mode alongside the existing DHCP server.
-    Field: iVentoy runs its own DHCP server for an isolated staging switch.
+    Lan (default): informational — logged during setup. The effective iVentoy DHCP mode
+    and UEFI boot file (ProxyNet + snp.efi for LAN operation) are set via the iVentoy GUI
+    and saved to data\config.dat before running setup.ps1. The service binary always uses
+    -Service -R flags (per vendor InstallService.bat); it does not accept /mode flags.
+    Field: also informational; indicates an isolated staging network where iVentoy serves
+    DHCP. Set DHCPServer mode in the iVentoy GUI (data\config.dat), not via -Mode.
 
 .EXAMPLE
     .\setup.ps1 -WhatIf
@@ -263,6 +267,11 @@ function Disable-HostSleep {
 }
 
 function Install-IVentoyService {
+    # Registers the iVentoy Windows service using the vendor-correct binary flags:
+    #   "<exe>" -Service -R  (per vendor InstallService.bat)
+    # The effective DHCP mode (ProxyNet), NIC, IP pool, and UEFI boot file (snp.efi)
+    # are stored in data\config.dat, created by an interactive iVentoy GUI session.
+    # setup.ps1 -Mode is informational only — it is logged but NOT passed to the service.
     [CmdletBinding(SupportsShouldProcess)]
     param()
 
@@ -298,12 +307,30 @@ function Install-IVentoyService {
         return
     }
 
+    # iVentoy reads data\config.dat at service startup for all runtime parameters
+    # (NIC, IP pool, DHCP mode, UEFI boot file). The vendor InstallService.bat aborts
+    # if this file is absent; setup.ps1 mirrors that guard.
+    $configDat = Join-Path (Split-Path $exePath -Parent) 'data\config.dat'
+    if (-not (Test-Path -Path $configDat)) {
+        Write-Log ("iVentoy config.dat not found at '$configDat'. " +
+            'Run iVentoy interactively once (elevated): launch iVentoy_64.exe, ' +
+            'set Server IP, IP pool, DHCP mode (ProxyNet), UEFI boot file (snp.efi), ' +
+            'click Start to confirm RUNNING, then close. ' +
+            'This creates data\config.dat. Re-run setup.ps1 after that.') 'WARN'
+        return
+    }
+
+    # DhcpMode from config.psd1 is informational — the service reads config.dat for the
+    # effective mode. Log it for operator awareness but do not pass it as a flag.
+    Write-Log ("DhcpMode configured as '$dhcpMode' (informational) — effective mode is " +
+        'read from config.dat by the service at startup.') 'INFO'
+
     if ($PSCmdlet.ShouldProcess($serviceName, 'Register iVentoy Windows service')) {
         New-Service -Name $serviceName `
-            -BinaryPathName "`"$exePath`" /mode $dhcpMode" `
+            -BinaryPathName "`"$exePath`" -Service -R" `
             -DisplayName 'iVentoy PXE Server' `
             -StartupType Automatic | Out-Null
-        Write-Log "iVentoy service '$serviceName' registered (DhcpMode: $dhcpMode)." 'INFO'
+        Write-Log "iVentoy service '$serviceName' registered (-Service -R, start=Automatic)." 'INFO'
     }
 }
 

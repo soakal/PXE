@@ -142,8 +142,30 @@ This is the LAN-mode default. For Field mode see the Setup section.
 [2026-07-06 09:15:02] [INFO] DC standby disabled (timeout=0).
 [2026-07-06 09:15:02] [INFO] Hibernate disabled.
 [2026-07-06 09:15:03] [INFO] iVentoy extracted to 'C:\iVentoy'.
-[2026-07-06 09:15:03] [INFO] iVentoy service 'iVentoy' registered (DhcpMode: ExternalNet).
+[2026-07-06 09:15:03] [WARN] iVentoy config.dat not found at 'C:\iVentoy\iventoy-1.0.37\data\config.dat'. Run iVentoy interactively once (elevated): launch iVentoy_64.exe, set Server IP, IP pool, DHCP mode (ProxyNet), UEFI boot file (snp.efi), click Start to confirm RUNNING, then close. This creates data\config.dat. Re-run setup.ps1 after that.
 [2026-07-06 09:15:03] [SUCCESS] === Completed successfully ===
+```
+
+`setup.ps1` exits 0 even when service registration is skipped — only the
+`data\config.dat` precondition determines whether the service is registered.
+After running iVentoy interactively (see
+[iVentoy auto-start on boot](#iventoy-auto-start-on-boot) in the Setup section),
+re-run `setup.ps1` to register the service:
+
+```
+[2026-07-06 09:16:00] [INFO] === PXEForge setup v0.1.0 started (Mode: Lan) ===
+...
+[2026-07-06 09:16:00] [INFO] iVentoy service 'iVentoy' already installed — skipping.
+```
+
+Or on the second invocation before any service has been registered but after
+`config.dat` exists:
+
+```
+[2026-07-06 09:16:00] [INFO] iVentoy install root 'C:\iVentoy' already populated — skipping extraction.
+[2026-07-06 09:16:00] [INFO] DhcpMode configured as 'ExternalNet' (informational) — effective mode is read from config.dat by the service at startup.
+[2026-07-06 09:16:00] [INFO] iVentoy service 'iVentoy' registered (-Service -R, start=Automatic).
+[2026-07-06 09:16:00] [SUCCESS] === Completed successfully ===
 ```
 
 #### Expected output (idempotent re-run)
@@ -195,8 +217,11 @@ console and the log file.
 
 Use LAN mode on your normal office or home network where an existing DHCP
 server (such as a UDM Pro Max) is already handing out IPs. iVentoy runs
-in `ExternalNet` DHCP mode and coexists with your DHCP server — it does
-not serve IPs itself and will not conflict.
+in **ProxyNet** DHCP mode (configured interactively — see
+[iVentoy auto-start on boot](#iventoy-auto-start-on-boot) below) with
+UEFI boot file `snp.efi`. The `-Mode Lan` flag is informational; it is
+logged but does not control the service binary flags or the iVentoy DHCP
+mode, which are stored in `C:\iVentoy\iventoy-1.0.37\data\config.dat`.
 
 ```powershell
 # From an elevated PowerShell prompt in C:\PXEForge\src\:
@@ -208,17 +233,19 @@ not serve IPs itself and will not conflict.
 ### Field mode
 
 Use Field mode when you are deploying on an isolated staging switch with
-no external DHCP server. iVentoy switches to `DHCPServer` mode and hands
-out IP addresses on that isolated network.
+no external DHCP server. iVentoy is configured for `DHCPServer` mode via
+the iVentoy GUI (saved to `data\config.dat`) and hands out IP addresses
+on that isolated network. The `-Mode Field` flag is informational.
 
 ```powershell
 .\setup.ps1 -Mode Field
 ```
 
-If iVentoy is already installed (e.g., you re-run after changing mode),
-the service registration is skipped (idempotent). To change DhcpMode on
-an already-installed service, uninstall the service manually and re-run
-setup with the desired `-Mode`.
+If iVentoy is already installed (e.g., you re-run setup.ps1),
+the service registration is skipped (idempotent). The effective iVentoy DHCP
+mode and boot file come from `data\config.dat` set during interactive setup —
+not from the `-Mode` parameter. To change the DHCP mode, re-run iVentoy
+interactively, update the settings, restart the service.
 
 ### Choosing between LAN and Field
 
@@ -227,6 +254,89 @@ setup with the desired `-Mode`.
 | Office or home network, UDM Pro Max or similar handles DHCP | Lan (default) |
 | Dedicated imaging bench with its own switch, no upstream DHCP | Field |
 | Isolated staging environment, on-site deployment with no network infrastructure | Field |
+
+### iVentoy auto-start on boot
+
+Before `setup.ps1` can register the iVentoy Windows service, iVentoy must be
+run interactively at least once to create its configuration file at
+`C:\iVentoy\iventoy-1.0.37\data\config.dat`. The vendor's `InstallService.bat`
+has the same requirement — it aborts if `config.dat` is absent. If `setup.ps1`
+reaches the service registration step and `config.dat` does not exist, it logs a
+WARN and skips registration (exit 0 — not fatal). Re-run `setup.ps1` after the
+interactive step below.
+
+**Step 1 — Run iVentoy interactively (one-time):**
+
+From an elevated PowerShell prompt:
+
+```powershell
+& 'C:\iVentoy\iventoy-1.0.37\iVentoy_64.exe'
+```
+
+In the iVentoy GUI:
+
+1. Set **Server IP** to the host's static LAN IP address.
+2. Set the **IP pool** to a range that does not overlap the LAN DHCP pool (the
+   UDM Pro Max hands out its own range — use a non-overlapping range here).
+3. Set **DHCP mode** to **ProxyNet** (the proven working mode for LAN operation
+   with a UDM Pro Max or similar router handling existing DHCP).
+4. Set **UEFI boot file** to `snp.efi`.
+5. Click **Start** and confirm the status shows **RUNNING**.
+6. Close the iVentoy window.
+
+This writes all parameters to `C:\iVentoy\iventoy-1.0.37\data\config.dat`. The
+service reads this file at startup and serves headless — no GUI window, starts
+before login.
+
+> **Note on DhcpMode config key:** `DhcpMode` in `config.psd1` defaults to
+> `ExternalNet` and is informational only — it is logged during setup but NOT
+> passed to the service binary. The service always registers with flags
+> `-Service -R` (per vendor `InstallService.bat`). Set the actual DHCP mode
+> (ProxyNet for LAN) in the iVentoy GUI, not via `-Mode`.
+
+**Step 2 — Register the service:**
+
+After `config.dat` exists, re-run `setup.ps1` from an elevated prompt:
+
+```powershell
+Set-Location C:\PXEForge\src
+.\setup.ps1
+```
+
+`setup.ps1` detects `config.dat`, registers the service with vendor-correct flags
+(`"C:\iVentoy\iventoy-1.0.37\iVentoy_64.exe" -Service -R`, `start=Automatic`),
+and the service starts automatically at boot before login with no window.
+
+Alternatively, use the vendor's `InstallService.bat` directly (elevated):
+
+```powershell
+& 'C:\iVentoy\iventoy-1.0.37\InstallService.bat'
+```
+
+**Step 3 — Verify after reboot:**
+
+```powershell
+# Confirm service is running:
+Get-Service iVentoy
+
+# Confirm ports are active:
+Get-NetUDPEndpoint -LocalPort 67,69 -ErrorAction SilentlyContinue
+Get-NetTCPConnection -LocalPort 16000 -State Listen
+
+# Run full health validation:
+Set-Location C:\PXEForge\src
+.\validate.ps1
+```
+
+After reboot the `iVentoy` service shows `Running`. UDP 67/69 and TCP 16000
+should have active listeners. TCP 26000 (management UI) is idle unless the
+GUI is open — that is normal.
+
+> **iVentoy version upgrade:** A version upgrade installs a new
+> `iventoy-<ver>\` subfolder. The old service registration points at the old
+> exe path and is no longer valid. Re-run the interactive step and re-run
+> `setup.ps1` (after removing the old service: `sc.exe delete iVentoy`) to
+> register the new path.
 
 ---
 
@@ -249,7 +359,7 @@ this file.
 | `ZipPath` | Full path where setup expects the downloaded iVentoy zip | `C:\ProgramData\PXEForge\iventoy_64.zip` | If you store the zip elsewhere; must match your actual download location |
 | `HttpPort` | TCP port for iVentoy's HTTP API | `16000` | If another service binds 16000 |
 | `UiPort` | TCP port for iVentoy's management UI (loopback-only firewall rule) | `26000` | If another service binds 26000 |
-| `DhcpMode` | iVentoy DHCP mode written to service registration | `ExternalNet` | Set to `DHCPServer` for Field mode — controlled automatically by `-Mode Field` |
+| `DhcpMode` | iVentoy DHCP mode (informational — logged during setup; the effective mode is saved in `data\config.dat` via the iVentoy GUI at interactive setup time) | `ExternalNet` | Does not control the service binary flags (which are always `-Service -R`). Change the actual DHCP mode via the iVentoy GUI: use ProxyNet for LAN operation, DHCPServer for an isolated Field switch. |
 | `ServiceName` | Windows service name for iVentoy | `iVentoy` | Rarely — must match what iVentoy registers |
 
 #### Share section
@@ -336,8 +446,11 @@ redirecting logs.
 .\setup.ps1 -ConfigPath 'C:\PXEForge\src\config.psd1' -LogPath 'D:\Logs\setup-custom.log'
 ```
 
-The `-Mode` parameter accepts `Lan` (default) or `Field`. It controls the
-`DhcpMode` written into the iVentoy service binary path at registration time.
+The `-Mode` parameter accepts `Lan` (default) or `Field`. It is informational —
+logged during setup but no longer controls the iVentoy service binary flags (those
+are always `-Service -R`, per vendor `InstallService.bat`). The effective DHCP mode
+and UEFI boot file are set via the iVentoy GUI and stored in `data\config.dat`
+(use ProxyNet + snp.efi for LAN operation).
 
 #### sync-images.ps1
 
@@ -539,16 +652,20 @@ Get-NetUDPEndpoint -LocalPort 67 -ErrorAction SilentlyContinue
 - If firewall rules are missing: re-run `.\setup.ps1` (idempotent; it will
   recreate missing rules).
 - If you are in LAN mode and the UDM Pro Max is also responding to the PXE
-  request but providing no PXE boot file, confirm iVentoy is in `ExternalNet`
-  mode (not `DHCPServer`). The service binary path ends in `/mode ExternalNet`.
-  Check with:
+  request but providing no PXE boot file, confirm iVentoy is configured in
+  **ProxyNet** mode with UEFI boot file **snp.efi** (the proven working
+  configuration). The service binary path ends in `-Service -R`; the effective
+  DHCP mode comes from `C:\iVentoy\iventoy-1.0.37\data\config.dat`. Verify the
+  registered binary path:
   ```powershell
   Get-WmiObject Win32_Service -Filter "Name='iVentoy'" | Select-Object PathName
   ```
-- If you need iVentoy to be the sole DHCP server (isolated switch), re-run
-  setup in Field mode: `.\setup.ps1 -Mode Field` (after manually removing the
-  existing iVentoy service: `Remove-Service -Name 'iVentoy'` on PS 6+, or
-  `sc.exe delete iVentoy` on PS 5.1).
+  To change the DHCP mode, re-run iVentoy interactively, update ProxyNet/snp.efi
+  settings, click Start to confirm RUNNING, then restart the service.
+- If you need iVentoy to be the sole DHCP server (isolated switch), configure
+  `DHCPServer` mode in the iVentoy GUI (saved to `config.dat`), then restart the
+  service. If reinstalling the service: `sc.exe delete iVentoy` then re-run
+  `.\setup.ps1` (after creating a new `config.dat` via interactive setup).
 - If iVentoy DHCP cannot coexist with your network, use the TinyPXE fallback:
   `.\pxe-fallback.ps1 -Mode Field`
 
@@ -625,6 +742,41 @@ Get-EventLog -LogName System -Source 'Service Control Manager' -Newest 20 |
   `C:\TinyPXE\config.ini` was written (use `Get-Content C:\TinyPXE\config.ini`)
   and that the TftpRoot `C:\TinyPXE\files\` exists and contains `bootmgfw.efi`.
 
+### Service installed but iVentoy not serving (only port 26000 active)
+
+**Symptom:** `Get-Service iVentoy` shows Running but
+`Get-NetTCPConnection -LocalPort 16000 -State Listen` returns nothing and UDP
+67/69 have no listeners. Port 26000 may be active. `validate.ps1` reports FAIL
+on port checks.
+
+**Cause:** `data\config.dat` was saved while iVentoy was in a Stopped state,
+or holds a stale Server IP that does not match the host's current NIC address.
+The service starts but cannot bind to the configured IP.
+
+**Fix:**
+
+1. Re-run iVentoy interactively from an elevated prompt:
+   ```powershell
+   & 'C:\iVentoy\iventoy-1.0.37\iVentoy_64.exe'
+   ```
+2. Verify **Server IP** matches the host's current static LAN IP.
+3. Confirm **DHCP mode** is **ProxyNet** and **UEFI boot file** is `snp.efi`.
+4. Click **Start** and confirm **RUNNING**.
+5. Close the GUI (this saves `config.dat`).
+6. Restart the service:
+   ```powershell
+   Restart-Service -Name 'iVentoy'
+   ```
+7. Re-run validation:
+   ```powershell
+   Set-Location C:\PXEForge\src
+   .\validate.ps1
+   ```
+
+If the service is not yet installed (setup.ps1 skipped registration because
+`config.dat` was absent): complete the interactive step above to create
+`config.dat`, then re-run `.\setup.ps1`.
+
 ### Port conflicts — 16000, 26000, 67-69 already in use
 
 **Symptom:** iVentoy service starts but PXE does not work, or `validate.ps1`
@@ -648,9 +800,11 @@ Get-NetTCPConnection -LocalPort 16000 -State Listen |
 
 - UDP 67/68 conflict: another DHCP server is running on this host (e.g.,
   Windows DHCP Server role). Disable it or stop it before iVentoy can use
-  those ports. In LAN mode iVentoy only listens passively for PXE flags in
-  DHCP traffic, so a conflict here usually means iVentoy is set to
-  `DHCPServer` mode when it should be `ExternalNet`.
+  those ports. In LAN mode iVentoy listens passively for PXE flags in
+  DHCP traffic (ProxyNet mode), so a conflict here usually means iVentoy is
+  configured to `DHCPServer` mode in `config.dat` when it should be `ProxyNet`.
+  Re-run iVentoy interactively to correct the mode in `config.dat`, then
+  restart the service.
 - TCP 16000 conflict: change `IVentoy.HttpPort` in `config.psd1`, update the
   `Firewall.TcpPorts` list to match, and re-run `.\setup.ps1`.
 - TCP 26000 conflict: change `IVentoy.UiPort` in `config.psd1` and re-run

@@ -265,10 +265,11 @@ Describe 'Install-IVentoyService' {
                 FullName = Join-Path (Join-Path $script:Config.IVentoy.InstallRoot 'iventoy-1.0.37') 'iVentoy_64.exe'
             }
         } -ParameterFilter { $Filter -eq 'iVentoy_64.exe' }
-        $script:InstallRoot = $script:Config.IVentoy.InstallRoot
+        $script:InstallRoot   = $script:Config.IVentoy.InstallRoot
     }
 
     BeforeEach {
+        # Default: zip present, installRoot present, config.dat present, service absent.
         Mock Test-Path   { $true }
         Mock Get-Service {}
     }
@@ -281,7 +282,7 @@ Describe 'Install-IVentoyService' {
     }
 
     It 'extracts archive and registers service on first install' {
-        # zip exists; install root does not yet exist
+        # zip exists; install root does not yet exist; config.dat exists (catch-all $true)
         Mock Test-Path { $false } -ParameterFilter { $Path -eq $script:InstallRoot }
         Install-IVentoyService
         Should -Invoke Expand-Archive -Exactly 1 -Scope It
@@ -289,7 +290,7 @@ Describe 'Install-IVentoyService' {
     }
 
     It 'skips extraction when install root already populated' {
-        # both zip and installRoot exist, service absent
+        # both zip and installRoot exist, config.dat exists, service absent
         Install-IVentoyService
         Should -Invoke Expand-Archive -Exactly 0 -Scope It
         Should -Invoke New-Service    -Exactly 1 -Scope It
@@ -303,10 +304,34 @@ Describe 'Install-IVentoyService' {
         Should -Invoke New-Service    -Exactly 0 -Scope It
     }
 
-    It 'registers service with BinaryPathName containing iVentoy_64.exe' {
-        # install root already exists; service absent — triggers New-Service
+    It 'calls New-Service exactly once when config.dat is present' {
+        # BeforeEach catch-all Test-Path { $true } already returns $true for all paths
+        # including config.dat — the happy path proceeds to New-Service.
+        Install-IVentoyService
+        Should -Invoke New-Service -Exactly 1 -Scope It
+    }
+
+    It 'warns and skips New-Service when config.dat is missing' {
+        # ParameterFilter mocks always win over the BeforeEach catch-all { $true }.
+        # config.dat path → $false (absent); everything else → $true.
+        Mock Test-Path { $false } -ParameterFilter { $Path -like '*data\config.dat' }
+        Mock Test-Path { $true }  -ParameterFilter { $Path -notlike '*data\config.dat' }
+        Install-IVentoyService
+        # config.dat guard fires → function returns before New-Service.
+        Should -Invoke New-Service -Exactly 0 -Scope It
+        # Prove the guard was actually reached: Test-Path was called with a config.dat path.
+        # (The WARN is logged at that point — see setup.ps1 Install-IVentoyService lines 315-320.)
+        Should -Invoke Test-Path -Times 1 -Scope It -ParameterFilter { $Path -like '*data\config.dat' }
+    }
+
+    It 'registers service with vendor-correct flags (-Service -R) and not /mode' {
+        # Vendor flags: "<exe>" -Service -R (per InstallService.bat); no /mode flag.
         Install-IVentoyService
         Should -Invoke New-Service -Exactly 1 -Scope It `
-            -ParameterFilter { $BinaryPathName -like '*iVentoy_64.exe*' }
+            -ParameterFilter {
+                $BinaryPathName -like '*iVentoy_64.exe*' -and
+                $BinaryPathName -like '*-Service -R*' -and
+                $BinaryPathName -notlike '*/mode*'
+            }
     }
 }

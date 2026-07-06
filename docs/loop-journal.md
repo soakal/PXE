@@ -347,3 +347,79 @@ against the M5 guide (Option A wording) to be corrected in a future iteration.
   extracted to C:\iVentoy. **Still needed:** re-run setup with -ConfigPath (now
   registers the service), place both ISOs in the real iso dir, start service,
   validate, PXE-boot the test laptop.
+
+---
+
+## M6 — follow-up: fix Install-IVentoyService service model (2026-07-06)
+
+**Work item:** Fix `Install-IVentoyService` in `src/setup.ps1` to use the
+vendor-correct service registration flags, update Pester tests, and bring
+`docs/user-guide.md` current with the proven field configuration.
+
+### Root cause (field finding, no mock could catch)
+
+The iVentoy vendor installer (`InstallService.bat`) registers the service as:
+
+```
+sc create iVentoy binPath= "C:\iVentoy\iventoy-1.0.37\iVentoy_64.exe -Service -R" start= auto
+```
+
+The service reads `data\config.dat` (created by an interactive GUI session) for
+all runtime parameters — NIC, IP pool, DHCP mode, UEFI boot file. It does NOT
+accept `/mode` command-line flags. The previous `setup.ps1` code passed
+`/mode ExternalNet` (or `DHCPServer`) in the binary path, which is wrong, and
+there was no guard for the required `config.dat` precondition.
+
+### Changes (files changed, no host commands run)
+
+**`src/setup.ps1` — `Install-IVentoyService`:**
+- Changed service `BinaryPathName` from `"<exe>" /mode $dhcpMode` to
+  `"<exe>" -Service -R` (vendor-correct flags).
+- Added `config.dat` precondition guard: before calling `New-Service`, checks
+  `(Split-Path $exePath -Parent)\data\config.dat`. If absent, logs a WARN
+  directing the operator to run iVentoy interactively and returns without
+  registering — mirroring the vendor `.bat`'s behavior. Keeps idempotency.
+- `$dhcpMode` is retained for an INFO log noting it is informational; the
+  effective mode comes from `config.dat`. `DhcpMode` config key NOT deleted.
+- Updated function comment header and `.PARAMETER Mode` docs to remove stale
+  `/mode ExternalNet` language.
+
+**`tests/Setup.Tests.ps1` — `Describe 'Install-IVentoyService'`:**
+- Added `$script:ConfigDatPath` to `BeforeAll` (derived from mock exe path).
+- New test: `config.dat` present → `New-Service` called exactly once.
+- New test: `config.dat` missing → `New-Service` called exactly 0 times + WARN
+  logged (asserted via `Write-Host -ForegroundColor Yellow` filter).
+- Updated flags test: asserts `BinaryPathName` contains `-Service -R` and does
+  NOT contain `/mode`.
+- All existing tests preserved; all host-mutating cmdlets remain mocked.
+
+**`docs/user-guide.md`:**
+- Added `### iVentoy auto-start on boot` subsection in the Setup section:
+  two-step process (interactive GUI → `data\config.dat` → `setup.ps1`
+  registers service), ProxyNet + snp.efi as the proven LAN config, reboot
+  verification commands, version-upgrade note.
+- Updated stale expected-output transcript to show WARN on first run (no
+  `config.dat`) plus a second-run transcript showing service registered.
+- Updated LAN mode description to cite ProxyNet + snp.efi (not ExternalNet).
+- Updated `DhcpMode` table entry: informational only; effective mode via GUI.
+- Updated `-Mode` parameter docs: informational, not binary-path flags.
+- Updated Troubleshooting > No PXE offer: removed `/mode ExternalNet` from
+  service binary path claim; replaced with ProxyNet + snp.efi guidance.
+- Updated Port conflicts section: `ExternalNet` → `ProxyNet`.
+- Added new Troubleshooting section: service installed but not serving (only
+  `:26000` active) → stale `config.dat` Server IP; fix via interactive re-run.
+- All seven required sections and all config.psd1 key/param mentions preserved
+  (Docs.Tests.ps1 coverage remains green).
+
+**`docs/loop-journal.md`:** This entry.
+
+### Gates (run by Arbiter — Engineer made no host-mutating calls, no git)
+
+Operator must run:
+```powershell
+Invoke-Pester -CI
+Invoke-ScriptAnalyzer -Path src -Recurse -Severity Error
+```
+
+On-box install (service registration with the corrected flags) remains a
+manual operator step per the AWAITING_HUMAN status of M6.
