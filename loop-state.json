@@ -1,1 +1,1 @@
-{ "milestone": "M1", "workItem": "Test-Prerequisites implementation", "iteration": 0, "status": "active" }
+{ "milestone": "M2", "workItem": "setup.ps1 full implementation: share + ACLs, sddeploy account, firewall rules, powercfg, iVentoy extract + service registration", "iteration": 0, "status": "active" }
