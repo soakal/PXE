@@ -245,3 +245,53 @@ Per the CLAUDE.md contract, M6 is **human-only**: the loop stops at M5 and write
 Milestones delivered: M1 (config + setup skeleton) 0ef8eba · M2 (setup.ps1 full) d4a434e · M3 (sync-images + validate) 5b22010 · M4 (Tiny PXE Secure-Boot fallback) 6ba071e · M5 (user guide) 913172c.
 
 **Side note (user, 2026-07-05):** Brian builds at home, runs on a work PC where C:=OS and D: holds SmartDeploy data in a folder literally named `SmartDeploy` (`D:\SmartDeploy`). Recorded to memory [[pxeforge-work-box-layout]]; reconcile `Share.Path`/`Sync.Source` in config.psd1 at install time (all config-driven, no code change) and cover in the M5 guide.
+
+---
+
+## M6 — Human hardware validation (in progress, 2026-07-06)
+
+Brian began the M6 manual run on the office Pro box (`DeployW11Pro`). Pre-run
+read-only preflight surfaced real field findings before any script ran:
+
+**Finding A — pre-existing SmartDeploy share (config reconciliation).** The box
+already has SMB share `SDShare` → `D:\SmartDeploy` (populated: Images, Platform
+Packs, Answer Files, ISO, ...) served by an existing local account
+`DeployW11Pro\SDShareUser` (Read). Repo defaults (`D:\SDShare` + `sddeploy`) do
+not match. Because `setup.ps1` detects an existing share by **name only**
+(`validate` of `Get-SmbShare -Name`), running with defaults would silently no-op
+the share step, create a redundant `sddeploy` account, and leave an empty
+`D:\SDShare`. **Resolution:** operator chose Option A — reconcile `config.psd1`
+to `Share.Path='D:\SmartDeploy'`, `Share.ServiceAccount='SDShareUser'` (kept as a
+LOCAL working-tree edit on the office box; NOT committed — committing office
+values would break the home defaults). No sync step at the office. See
+[[pxeforge-work-box-layout]].
+
+**Finding B — single-ISO rule too strict (code fix, this iteration).** The shop
+serves multiple customer profiles (Dynics + VRSI, both 3.0.2050) from one iVentoy
+boot menu — iVentoy supports this natively. But `validate.ps1` Check 4
+(`Test-IsoPresent`) hard-coded `$count -eq 1` and would FAIL with two ISOs
+present, a false negative on a healthy appliance. The "exactly one" rule traced
+to the M3 contract gate; its real intent was "at least one, so the menu isn't
+empty."
+
+### Iteration 1 (Engineer, Sonnet)
+Changed `Test-IsoPresent` to `$count -ge 1` (PASS on >=1, FAIL only on 0; PASS
+log now reports the actual count). Flipped the 2-ISO Pester test from
+`Should -BeFalse` to `Should -BeTrue`. Zero-ISO and call-count assertions
+preserved. Gates: Pester 27/0, PSSA -Severity Error clean.
+
+### Iteration 1 Realist verdict (Sonnet): REJECT → APPROVE (after Arbiter scope isolation)
+Initial REJECT was correct but targeted Arbiter/operator changes bundled in the
+working tree (`config.psd1`, `loop-state.json`), not the Engineer's code. Arbiter
+staged only the two work-item files (`git diff --cached` = `src/validate.ps1` +
+`tests/Validate.Tests.ps1`); Realist re-reviewed the isolated diff and APPROVED
+(logic correct for 0/1/2+ boundaries, assertions preserved, both gates green).
+
+### Merge checklist — ALL PASS
+- [x] Pester -CI 27/0.
+- [x] PSSA -Severity Error CLEAN.
+- [x] Realist verdict APPROVE (on isolated staged diff).
+- [x] Scope: `src/validate.ps1` + `tests/Validate.Tests.ps1` only.
+- [x] Commit `M6: validate.ps1 Test-IsoPresent accepts >=1 ISO (multi-ISO menu support) [council-approved]` → **0e596e5**.
+
+### Still open (human): setup.ps1 run, ISO placement, service start, validate, and the actual test-laptop PXE boot. Status remains AWAITING_HUMAN until Brian signs off on a successful boot.
