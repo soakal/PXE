@@ -295,3 +295,55 @@ staged only the two work-item files (`git diff --cached` = `src/validate.ps1` +
 - [x] Commit `M6: validate.ps1 Test-IsoPresent accepts >=1 ISO (multi-ISO menu support) [council-approved]` → **0e596e5**.
 
 ### Still open (human): setup.ps1 run, ISO placement, service start, validate, and the actual test-laptop PXE boot. Status remains AWAITING_HUMAN until Brian signs off on a successful boot.
+
+---
+
+## M6 — continued field findings (2026-07-06, first real setup.ps1 run)
+
+Brian ran setup.ps1 on the office box. -WhatIf preview was clean; the real run
+exited [SUCCESS] -- but verification showed the **iVentoy service was never
+registered**. Three more findings surfaced, all from real hardware the mocked
+suite could not have caught:
+
+**Finding C -- iVentoy exe detection bug (CODE FIX, merged 3274ba1).** The real
+iVentoy 1.0.37 free zip extracts to a nested C:\iVentoy\iventoy-1.0.37\ folder
+and names its 64-bit binary iVentoy_64.exe. Install-IVentoyService searched
+-Filter 'iventoy.exe', found nothing, logged the non-fatal WARN "iVentoy
+executable not found", and skipped the service-registration call -- so setup
+reported SUCCESS with no service installed. The Pester mock at
+Setup.Tests.ps1:263 hardcoded 'iventoy.exe', which is exactly why the green suite
+missed it (mock returned a fake exe regardless of the real filter). Fix: filter
+-> 'iVentoy_64.exe' (-Recurse already handles the nesting) + mock corrected to the
+real nested layout with a -ParameterFilter regression guard. Engineer->Realist->
+APPROVE, Pester 102/0.
+
+**Finding D -- IsoDir path wrong for real layout (config).** Repo default
+IVentoy.IsoDir = 'C:\iVentoy\iso' does not exist after a real extraction; iVentoy
+scans its own iso subfolder next to the exe: C:\iVentoy\iventoy-1.0.37\iso. The
+path is version-coupled, so the durable fix (derive IsoDir from the discovered
+exe dir, or template off Version) is deferred as a future work item. For now the
+office override sets the correct path.
+
+**Finding A (REVISED) -- per-environment config must use -ConfigPath, not an
+in-place edit.** The M5 guide's "Option A" tells operators to edit src/config.psd1
+in place. But Setup.Tests.ps1:90-95 loads the real config and asserts
+Share.Path -eq 'D:\SDShare' -- so any in-place environment edit BREAKS
+Invoke-Pester (the merge gate) and cannot be committed without changing the
+contract defaults. Correct pattern: keep src/config.psd1 pristine and run the
+scripts with -ConfigPath pointing at an environment file. Resolution: reverted
+the in-place edit; created config.local.psd1 (gitignored) at repo root carrying
+the office values (Share.Path=D:\SmartDeploy, ServiceAccount=SDShareUser,
+IsoDir=C:\iVentoy\iventoy-1.0.37\iso). Operator runs
+.\setup.ps1 -ConfigPath ..\config.local.psd1 and
+.\validate.ps1 -ConfigPath ..\config.local.psd1. This is a **doc finding**
+against the M5 guide (Option A wording) to be corrected in a future iteration.
+
+### State
+- Finding C merged (3274ba1). Findings A/D handled operationally via
+  config.local.psd1; doc-guide correction + durable IsoDir derivation logged as
+  open future work items. Loop returns to AWAITING_HUMAN.
+- Host state already applied by the first real run: firewall rules (5), NTFS
+  ReadAndExecute for SDShareUser on D:\SmartDeploy, sleep disabled, iVentoy
+  extracted to C:\iVentoy. **Still needed:** re-run setup with -ConfigPath (now
+  registers the service), place both ISOs in the real iso dir, start service,
+  validate, PXE-boot the test laptop.
