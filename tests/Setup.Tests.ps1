@@ -99,3 +99,203 @@ Describe 'Scaffold contract' {
         }
     }
 }
+
+Describe 'Install-ServiceAccount' {
+    BeforeAll {
+        . $script:SetupPath
+        Mock Write-Host   {}
+        Mock Add-Content  {}
+        Mock New-LocalUser {}
+    }
+
+    BeforeEach {
+        Mock Get-LocalUser {}
+    }
+
+    It 'calls New-LocalUser exactly once when account does not exist' {
+        Install-ServiceAccount
+        Should -Invoke New-LocalUser -Exactly 1 -Scope It
+    }
+
+    It 'calls Get-LocalUser exactly once per run' {
+        Install-ServiceAccount
+        Should -Invoke Get-LocalUser -Exactly 1 -Scope It
+    }
+
+    It 'does not call New-LocalUser when account already exists (idempotency)' {
+        Mock Get-LocalUser { [PSCustomObject]@{ Name = $script:Config.Share.ServiceAccount } }
+        Install-ServiceAccount
+        Install-ServiceAccount
+        Should -Invoke New-LocalUser -Exactly 0 -Scope It
+    }
+}
+
+Describe 'Install-ImageShare' {
+    BeforeAll {
+        . $script:SetupPath
+        Mock Write-Host   {}
+        Mock Add-Content  {}
+        Mock New-Item     {}
+        Mock New-SmbShare {}
+        Mock Get-Acl      {
+            $ds = [PSCustomObject]@{ Access = @() }
+            $ds | Add-Member -MemberType ScriptMethod -Name 'AddAccessRule' -Value { param($r) }
+            $ds
+        }
+        Mock Set-Acl      {}
+    }
+
+    BeforeEach {
+        Mock Test-Path    { $false }
+        Mock Get-SmbShare {}
+    }
+
+    It 'creates base dir, all subdirs, the share, and applies ACL when nothing exists' {
+        Install-ImageShare
+        # 1 base dir + 3 subdirs (Images, Platform Packs, Answer Files)
+        Should -Invoke New-Item     -Exactly 4 -Scope It
+        Should -Invoke New-SmbShare -Exactly 1 -Scope It
+        Should -Invoke Set-Acl      -Exactly 1 -Scope It
+    }
+
+    It 'skips New-Item, New-SmbShare, and Set-Acl when everything already configured (idempotency)' {
+        Mock Test-Path    { $true }
+        Mock Get-SmbShare { [PSCustomObject]@{ Name = $script:Config.Share.Name } }
+        Mock Get-Acl      {
+            $account = $script:Config.Share.ServiceAccount
+            $ds = [PSCustomObject]@{
+                Access = @(
+                    [PSCustomObject]@{
+                        IdentityReference = [PSCustomObject]@{ Value = $account }
+                        FileSystemRights  = [System.Security.AccessControl.FileSystemRights]::ReadAndExecute
+                        AccessControlType = [System.Security.AccessControl.AccessControlType]::Allow
+                    }
+                )
+            }
+            $ds | Add-Member -MemberType ScriptMethod -Name 'AddAccessRule' -Value { param($r) }
+            $ds
+        }
+        Install-ImageShare
+        Install-ImageShare
+        Should -Invoke New-Item     -Exactly 0 -Scope It
+        Should -Invoke New-SmbShare -Exactly 0 -Scope It
+        Should -Invoke Set-Acl      -Exactly 0 -Scope It
+    }
+
+    It 'applies NTFS ACL when rule is not yet present (share exists, empty DACL)' {
+        Mock Test-Path    { $true }
+        Mock Get-SmbShare { [PSCustomObject]@{ Name = $script:Config.Share.Name } }
+        Install-ImageShare
+        Should -Invoke Set-Acl -Exactly 1 -Scope It
+    }
+
+    It 'calls Get-Acl exactly once per run' {
+        Install-ImageShare
+        Should -Invoke Get-Acl -Exactly 1 -Scope It
+    }
+}
+
+Describe 'Install-FirewallRules' {
+    BeforeAll {
+        . $script:SetupPath
+        Mock Write-Host          {}
+        Mock Add-Content         {}
+        Mock New-NetFirewallRule {}
+    }
+
+    BeforeEach {
+        Mock Get-NetFirewallRule {}
+    }
+
+    It 'creates all 5 firewall rules when none exist (3 UDP + 1 TCP + 1 loopback)' {
+        Install-FirewallRules
+        Should -Invoke New-NetFirewallRule -Exactly 5 -Scope It
+    }
+
+    It 'checks existence of each rule exactly once' {
+        Install-FirewallRules
+        Should -Invoke Get-NetFirewallRule -Exactly 5 -Scope It
+    }
+
+    It 'creates no rules when all already exist (idempotency)' {
+        Mock Get-NetFirewallRule { [PSCustomObject]@{ Name = 'exists' } }
+        Install-FirewallRules
+        Install-FirewallRules
+        Should -Invoke New-NetFirewallRule -Exactly 0 -Scope It
+    }
+}
+
+Describe 'Disable-HostSleep' {
+    BeforeAll {
+        . $script:SetupPath
+        Mock Write-Host      {}
+        Mock Add-Content     {}
+        Mock Invoke-PowerCfg {}
+    }
+
+    It 'calls Invoke-PowerCfg 4 times when sleep is not disabled (1 query + 3 mutations)' {
+        Mock Invoke-PowerCfg {
+            'Current AC Power Setting Index: 0x0000001e'
+            'Current DC Power Setting Index: 0x0000001e'
+        } -ParameterFilter { $Arguments -contains '/query' }
+        Disable-HostSleep
+        Should -Invoke Invoke-PowerCfg -Exactly 4 -Scope It
+    }
+
+    It 'skips mutations when sleep is already disabled (idempotency)' {
+        Mock Invoke-PowerCfg {
+            'Current AC Power Setting Index: 0x00000000'
+            'Current DC Power Setting Index: 0x00000000'
+        } -ParameterFilter { $Arguments -contains '/query' }
+        Disable-HostSleep
+        Disable-HostSleep
+        Should -Invoke Invoke-PowerCfg -Exactly 0 -Scope It -ParameterFilter { $Arguments -contains '/change' }
+    }
+}
+
+Describe 'Install-IVentoyService' {
+    BeforeAll {
+        . $script:SetupPath
+        Mock Write-Host     {}
+        Mock Add-Content    {}
+        Mock Expand-Archive {}
+        Mock New-Service    {}
+        Mock Get-ChildItem  { [PSCustomObject]@{ FullName = Join-Path $script:Config.IVentoy.InstallRoot 'iventoy.exe' } }
+        $script:InstallRoot = $script:Config.IVentoy.InstallRoot
+    }
+
+    BeforeEach {
+        Mock Test-Path   { $true }
+        Mock Get-Service {}
+    }
+
+    It 'warns and skips when zip is not present' {
+        Mock Test-Path { $false }
+        Install-IVentoyService
+        Should -Invoke Expand-Archive -Exactly 0 -Scope It
+        Should -Invoke New-Service    -Exactly 0 -Scope It
+    }
+
+    It 'extracts archive and registers service on first install' {
+        # zip exists; install root does not yet exist
+        Mock Test-Path { $false } -ParameterFilter { $Path -eq $script:InstallRoot }
+        Install-IVentoyService
+        Should -Invoke Expand-Archive -Exactly 1 -Scope It
+        Should -Invoke New-Service    -Exactly 1 -Scope It
+    }
+
+    It 'skips extraction when install root already populated' {
+        # both zip and installRoot exist, service absent
+        Install-IVentoyService
+        Should -Invoke Expand-Archive -Exactly 0 -Scope It
+        Should -Invoke New-Service    -Exactly 1 -Scope It
+    }
+
+    It 'skips extraction and registration when service already installed (idempotency)' {
+        Mock Get-Service { [PSCustomObject]@{ Name = $script:Config.IVentoy.ServiceName } }
+        Install-IVentoyService
+        Install-IVentoyService
+        Should -Invoke Expand-Archive -Exactly 0 -Scope It
+        Should -Invoke New-Service    -Exactly 0 -Scope It
+    }
+}

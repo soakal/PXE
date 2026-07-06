@@ -111,11 +111,201 @@ function Test-Prerequisites {
     Write-Log 'All prerequisites satisfied.' 'SUCCESS'
 }
 
-function Install-ServiceAccount   { [CmdletBinding(SupportsShouldProcess)] param() throw 'Not implemented — M2' }
-function Install-ImageShare       { [CmdletBinding(SupportsShouldProcess)] param() throw 'Not implemented — M2' }
-function Install-FirewallRules    { [CmdletBinding(SupportsShouldProcess)] param() throw 'Not implemented — M2' }
-function Disable-HostSleep        { [CmdletBinding(SupportsShouldProcess)] param() throw 'Not implemented — M2' }
-function Install-IVentoyService   { [CmdletBinding(SupportsShouldProcess)] param() throw 'Not implemented — M2' }
+# ── PowerCfg wrapper — mock this in tests; never call powercfg.exe directly ──
+function Invoke-PowerCfg {
+    [CmdletBinding()]
+    param([string[]]$Arguments)
+    & powercfg.exe @Arguments
+}
+
+function Install-ServiceAccount {
+    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    $account = $script:Config.Share.ServiceAccount
+    if (Get-LocalUser -Name $account -ErrorAction SilentlyContinue) {
+        Write-Log "'$account' service account already configured — skipping." 'INFO'
+        return
+    }
+
+    if ($PSCmdlet.ShouldProcess($account, 'Create local service account')) {
+        $chars  = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*'
+        $secPwd = New-Object System.Security.SecureString
+        1..24 | ForEach-Object { $secPwd.AppendChar($chars[(Get-Random -Maximum $chars.Length)]) }
+        $secPwd.MakeReadOnly()
+        New-LocalUser -Name $account -Password $secPwd `
+            -PasswordNeverExpires -UserMayNotChangePassword `
+            -Description 'PXEForge read-only share service account' | Out-Null
+        Write-Log "Service account '$account' created." 'INFO'
+    }
+}
+
+function Install-ImageShare {
+    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    $path    = $script:Config.Share.Path
+    $name    = $script:Config.Share.Name
+    $account = $script:Config.Share.ServiceAccount
+
+    if (-not (Test-Path -Path $path)) {
+        if ($PSCmdlet.ShouldProcess($path, 'Create share root directory')) {
+            New-Item -Path $path -ItemType Directory -Force | Out-Null
+            Write-Log "Created directory '$path'." 'INFO'
+        }
+    } else {
+        Write-Log "Directory '$path' already exists — skipping." 'INFO'
+    }
+
+    foreach ($sub in $script:Config.Share.SubDirs) {
+        $subPath = Join-Path $path $sub
+        if (-not (Test-Path -Path $subPath)) {
+            if ($PSCmdlet.ShouldProcess($subPath, 'Create subdirectory')) {
+                New-Item -Path $subPath -ItemType Directory -Force | Out-Null
+                Write-Log "Created subdirectory '$subPath'." 'INFO'
+            }
+        } else {
+            Write-Log "Subdirectory '$subPath' already exists — skipping." 'INFO'
+        }
+    }
+
+    if (Get-SmbShare -Name $name -ErrorAction SilentlyContinue) {
+        Write-Log "SMB share '$name' already configured — skipping." 'INFO'
+    } elseif ($PSCmdlet.ShouldProcess($name, 'Create SMB share')) {
+        New-SmbShare -Name $name -Path $path -ReadAccess $account | Out-Null
+        Write-Log "SMB share '$name' created (ReadAccess: $account)." 'INFO'
+    }
+
+    $acl         = Get-Acl -Path $path
+    $existingAce = $acl.Access | Where-Object {
+                       $_.IdentityReference.Value -like "*$account*" -and
+                       ($_.FileSystemRights -band [System.Security.AccessControl.FileSystemRights]::ReadAndExecute) -and
+                       $_.AccessControlType -eq [System.Security.AccessControl.AccessControlType]::Allow
+                   }
+    if ($existingAce) {
+        Write-Log "NTFS ACL already configured — skipping." 'INFO'
+    } elseif ($PSCmdlet.ShouldProcess($path, 'Apply NTFS read-only ACL')) {
+        $inherit = [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor
+                   [System.Security.AccessControl.InheritanceFlags]::ObjectInherit
+        $rule    = New-Object System.Security.AccessControl.FileSystemAccessRule(
+                       $account,
+                       [System.Security.AccessControl.FileSystemRights]::ReadAndExecute,
+                       $inherit,
+                       [System.Security.AccessControl.PropagationFlags]::None,
+                       [System.Security.AccessControl.AccessControlType]::Allow)
+        $acl.AddAccessRule($rule)
+        Set-Acl -Path $path -AclObject $acl
+        Write-Log "NTFS ACL applied: '$account' ReadAndExecute on '$path'." 'INFO'
+    }
+}
+
+function Install-FirewallRules {
+    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    $prefix = $script:Config.Firewall.RulePrefix
+
+    foreach ($port in $script:Config.Firewall.UdpPorts) {
+        $ruleName = '{0}-UDP-{1}' -f $prefix, $port
+        if (Get-NetFirewallRule -Name $ruleName -ErrorAction SilentlyContinue) {
+            Write-Log "Firewall rule '$ruleName' already exists — skipping." 'INFO'
+        } elseif ($PSCmdlet.ShouldProcess($ruleName, 'Create inbound UDP firewall rule')) {
+            New-NetFirewallRule -Name $ruleName -DisplayName $ruleName `
+                -Direction Inbound -Protocol UDP -LocalPort $port -Action Allow | Out-Null
+            Write-Log "Firewall rule '$ruleName' created." 'INFO'
+        }
+    }
+
+    foreach ($port in $script:Config.Firewall.TcpPorts) {
+        $ruleName = '{0}-TCP-{1}' -f $prefix, $port
+        if (Get-NetFirewallRule -Name $ruleName -ErrorAction SilentlyContinue) {
+            Write-Log "Firewall rule '$ruleName' already exists — skipping." 'INFO'
+        } elseif ($PSCmdlet.ShouldProcess($ruleName, 'Create inbound TCP firewall rule')) {
+            New-NetFirewallRule -Name $ruleName -DisplayName $ruleName `
+                -Direction Inbound -Protocol TCP -LocalPort $port -Action Allow | Out-Null
+            Write-Log "Firewall rule '$ruleName' created." 'INFO'
+        }
+    }
+
+    # UI management port — IPv4 loopback scope only (system constant, not a configurable address)
+    $uiPort  = $script:Config.IVentoy.UiPort
+    $uiRule  = '{0}-TCP-{1}-loopback' -f $prefix, $uiPort
+    if (Get-NetFirewallRule -Name $uiRule -ErrorAction SilentlyContinue) {
+        Write-Log "Firewall rule '$uiRule' already exists — skipping." 'INFO'
+    } elseif ($PSCmdlet.ShouldProcess($uiRule, 'Create loopback-only TCP firewall rule')) {
+        New-NetFirewallRule -Name $uiRule -DisplayName $uiRule `
+            -Direction Inbound -Protocol TCP -LocalPort $uiPort `
+            -RemoteAddress ([System.Net.IPAddress]::Loopback.ToString()) -Action Allow | Out-Null
+        Write-Log "Firewall rule '$uiRule' created (loopback-only)." 'INFO'
+    }
+}
+
+function Disable-HostSleep {
+    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    $queryOutput = (Invoke-PowerCfg -Arguments @('/query', 'SCHEME_CURRENT', 'SUB_SLEEP', 'STANDBYIDLE')) -join "`n"
+    $acZero      = $queryOutput -match 'Current AC Power Setting Index:\s*0x00000000'
+    $dcZero      = $queryOutput -match 'Current DC Power Setting Index:\s*0x00000000'
+    if ($acZero -and $dcZero) {
+        Write-Log 'Sleep already disabled — skipping.' 'INFO'
+        return
+    }
+
+    if ($PSCmdlet.ShouldProcess('host power settings', 'Disable standby and hibernate')) {
+        Invoke-PowerCfg -Arguments @('/change', 'standby-timeout-ac', '0')
+        Write-Log 'AC standby disabled (timeout=0).' 'INFO'
+        Invoke-PowerCfg -Arguments @('/change', 'standby-timeout-dc', '0')
+        Write-Log 'DC standby disabled (timeout=0).' 'INFO'
+        Invoke-PowerCfg -Arguments @('/hibernate', 'off')
+        Write-Log 'Hibernate disabled.' 'INFO'
+    }
+}
+
+function Install-IVentoyService {
+    [CmdletBinding(SupportsShouldProcess)]
+    param()
+
+    $zipPath     = $script:Config.IVentoy.ZipPath
+    $installRoot = $script:Config.IVentoy.InstallRoot
+    $serviceName = $script:Config.IVentoy.ServiceName
+    $dhcpMode    = if ($Mode -eq 'Field') { 'DHCPServer' } else { 'ExternalNet' }
+
+    if (-not (Test-Path -Path $zipPath)) {
+        Write-Log "iVentoy zip not found at '$zipPath' — skipping service installation." 'WARN'
+        return
+    }
+
+    if (Get-Service -Name $serviceName -ErrorAction SilentlyContinue) {
+        Write-Log "iVentoy service '$serviceName' already installed — skipping." 'INFO'
+        return
+    }
+
+    if (-not (Test-Path -Path $installRoot)) {
+        if ($PSCmdlet.ShouldProcess($zipPath, 'Extract iVentoy archive')) {
+            Expand-Archive -Path $zipPath -DestinationPath $installRoot -Force
+            Write-Log "iVentoy extracted to '$installRoot'." 'INFO'
+        }
+    } else {
+        Write-Log "iVentoy install root '$installRoot' already populated — skipping extraction." 'INFO'
+    }
+
+    $exePath = Get-ChildItem -Path $installRoot -Filter 'iventoy.exe' -Recurse `
+        -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+
+    if (-not $exePath) {
+        Write-Log "iVentoy executable not found under '$installRoot'." 'WARN'
+        return
+    }
+
+    if ($PSCmdlet.ShouldProcess($serviceName, 'Register iVentoy Windows service')) {
+        New-Service -Name $serviceName `
+            -BinaryPathName "`"$exePath`" /mode $dhcpMode" `
+            -DisplayName 'iVentoy PXE Server' `
+            -StartupType Automatic | Out-Null
+        Write-Log "iVentoy service '$serviceName' registered (DhcpMode: $dhcpMode)." 'INFO'
+    }
+}
 
 # ── Main ── (only runs when executed, not when dot-sourced by Pester)
 if ($MyInvocation.InvocationName -ne '.') {
