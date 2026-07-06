@@ -148,3 +148,53 @@ Traced all six fixes resolved; verified powercfg regex is a *safe degradation* (
 - [x] Commit `M2: setup.ps1 full implementation [council-approved]` → **d4a434e**.
 
 ### Result: APPROVED & MERGED. Loop advanced to M3 (sync-images.ps1 + validate.ps1).
+
+## Iteration 1-2 — M3: sync-images.ps1 + validate.ps1 — APPROVED & MERGED (5b22010)
+
+**Date:** 2026-07-05
+**Milestone:** M3 (sync-images.ps1 + validate.ps1)
+**Work item:** Two new scripts + mocked Pester. sync-images = robocopy mirror gated for destructive /MIR; validate = five read-only health checks.
+
+### Iteration 1 (Engineer, Sonnet)
+`src/sync-images.ps1`: `Invoke-Robocopy` wrapper (mockable), `Sync-Images [SupportsShouldProcess, ConfirmImpact=High] param([switch]$Force)` — gate `$Force -or ShouldProcess`, loops config `Sync.Include`, robocopy exit 0-7=ok / >=8=fail. `src/validate.ps1`: `Test-PortsListening`, `Test-AclAudit`, `Test-ServiceState`, `Test-IsoPresent` (exactly 1 — 0 or >1 fail), `Test-ShareReachable`, `Invoke-Validate` (exit 0 iff all pass). Plus Sync.Tests.ps1 + Validate.Tests.ps1.
+
+### Iteration 1 Realist verdict (Sonnet): **REJECT** — 3 findings, all upheld
+1. F1 — neither script had an elevation preflight; privileged ops (SMB share mgmt, share writes) would wrongly exit 1 instead of 4 (not elevated).
+2. F2 — `Import-PowerShellDataFile` ran unguarded at body scope; a bad `-ConfigPath` threw unhandled instead of exit 2 (bad input).
+3. F3 — `Validate.Tests.ps1` 'all five pass' test: `Mock Get-Acl` closed over an It-local `$account` that won't resolve in Pester 5's mock-dispatch scope under StrictMode.
+
+**Arbiter adjudication:** upheld all three. Noted setup.ps1 shares the F2 bad-ConfigPath gap but did NOT back-port mid-loop (scope) — M3 is strictly better; flagged for later cleanup.
+
+### Iteration 2 (Engineer, Sonnet)
+Added `Test-IsElevated` (verbatim from setup.ps1) to both scripts, called first in Main → exit 4; `Mock Test-IsElevated { $true }` added to every dot-sourcing Describe. Wrapped config import in try/catch → exit 2 when run as script, re-throw when dot-sourced. Moved `$account` assignment inside the `Mock Get-Acl` scriptblock (matching the correct sibling test).
+
+### Iteration 2 gates (Arbiter, run for real) + Realist sign-off
+- Parse OK ×4. **PSSA -Severity Error CLEAN.** Full Pester suite **67 passed / 0 failed / 3 skipped** (3 = M5 Docs coverage, correctly `-Skip`ped until docs/user-guide.md exists).
+- **Realist final verdict: APPROVE** — all three findings closed, no regression, host-mutation contained, zero hardcoded literals, scope only the four M3 files.
+
+### Result: APPROVED & MERGED (5b22010). Loop advanced to M4 (Tiny PXE Server fallback module).
+
+## Iteration 1-2 — M4: Tiny PXE Server fallback module — APPROVED & MERGED (6ba071e)
+
+**Date:** 2026-07-06
+**Milestone:** M4 (Secure-Boot-safe fallback: signed boot manager + BCD chain)
+**Work item:** New src/pxe-fallback.ps1 + tests/PxeFallback.Tests.ps1 + a TinyPxe config block. Serves the MS-signed Windows boot manager over TFTP; a BCD store ramdisk-boots the SmartPE WIM (Secure Boot safe — no unsigned iPXE).
+
+### Iteration 1 (Engineer, Sonnet)
+Five functions: bcd-edit wrapper, secure-boot file staging (Test-Path-guarded copies), BCD store builder (14-step ramdisk-WIM sequence, osloader GUID captured via regex and threaded into later /set calls), config writer (Lan=proxyDHCP / Field=full DHCP with an idempotency mode-marker), orchestrator with service registration. Added the TinyPxe block (10 keys) to config.psd1. All host-mutation mocked.
+
+### Iteration 1 Realist verdict (Sonnet): **REJECT** — 2 findings; Arbiter gates found 3 more test failures
+1. F1 — the bcd-edit wrapper didn't check `$LASTEXITCODE`; a failed native call returns non-zero silently (EAP Stop doesn't catch native exes in PS 5.1), so the builder could report SUCCESS over a broken store.
+2. F2 — an It-local `$tftpRoot` captured inside two `-ParameterFilter` closures (repeat of M3-F3 — won't resolve in Pester's mock-dispatch scope under StrictMode).
+3. (Arbiter gate) 3 New-BcdStore tests used `-AtLeastOnce`, which is NOT a valid Pester 5 `Should -Invoke` parameter — mis-binds Should and throws "does not take pipeline input." (Realist missed this — didn't run Pester.)
+
+### Iteration 2 (Engineer, Sonnet) + Arbiter typo fix
+Wrapper now captures output, checks `$LASTEXITCODE`, throws on non-zero. `-AtLeastOnce` → `-Times 1` (×3). It-local ParameterFilter vars → `$script:`-scoped (2 sites, Engineer audited and caught a second one). **Arbiter fix:** iteration 2 introduced a `$LASTEXITCODE:` interpolation syntax error (colon parsed as scope delimiter) that broke the whole script's parse → cascaded to 28 test failures; Arbiter corrected it to `${LASTEXITCODE}` directly (a typo the Arbiter had dictated in the fix spec).
+
+### Iteration 2 gates (Arbiter, run for real) + Realist sign-off
+- Parse OK. **PSSA -Severity Error CLEAN.** Full Pester suite **98 passed / 0 failed / 3 skipped** (3 = M5 Docs coverage, `-Skip`ped until docs/user-guide.md exists).
+- **Realist final verdict: APPROVE** — F1/F2 closed, `-Times 1` semantically correct, Secure-Boot BCD sequence intact (14 steps verified, GUID threading confirmed), scope only the two M4 files + the append-only TinyPxe config block.
+
+### Result: APPROVED & MERGED (6ba071e). Loop advanced to M5 (user documentation — the last automated milestone; M6 is human-only).
+
+**Side note (user, 2026-07-05):** Brian builds at home, runs on a work PC where C:=OS and D: holds SmartDeploy data in a folder literally named `SmartDeploy` (`D:\SmartDeploy`). Recorded to memory [[pxeforge-work-box-layout]]; reconcile `Share.Path`/`Sync.Source` in config.psd1 at install time (all config-driven, no code change) and cover in the M5 guide.

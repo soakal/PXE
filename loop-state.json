@@ -1,1 +1,1 @@
-{ "milestone": "M3", "workItem": "sync-images.ps1 + validate.ps1 (ports listening, ACL audit, service state, exactly one ISO present, share reachable)", "iteration": 0, "status": "active" }
+{ "milestone": "M5", "workItem": "User documentation: docs/user-guide.md (7 required sections, every config.psd1 key + every script param documented)", "iteration": 0, "status": "active" }
