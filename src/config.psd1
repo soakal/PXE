@@ -4,6 +4,8 @@
         Version     = '1.0.37'
         InstallRoot = 'C:\iVentoy'
         IsoDir      = 'C:\iVentoy\iso'
+        # Operator must download iVentoy zip and place it here before running setup.ps1
+        ZipPath     = 'C:\ProgramData\PXEForge\iventoy_64.zip'
         HttpPort    = 16000
         UiPort      = 26000          # firewall rule scoped to loopback only
         DhcpMode    = 'ExternalNet'  # LAN default; 'DHCPServer' for isolated field mode
