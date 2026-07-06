@@ -22,7 +22,7 @@
 
     # ── Image sync (Unraid → local share) ─────────────────
     Sync = @{
-        Source  = '\\argyle-unraid\SmartDeploy'
+        Source  = '\\SOURCE-SERVER\SmartDeploy'   # set per site; never the home box
         Include = @('Images', 'Platform Packs')
         # robocopy /MIR — destructive on destination; script must gate first run
     }

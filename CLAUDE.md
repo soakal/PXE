@@ -49,7 +49,7 @@ Arbiter merge checklist (all required):
 - SharePath: `D:\SDShare`, service account `sddeploy` (read-only SMB + NTFS).
 - iVentoy: v1.0.37, install root `C:\iVentoy`, ISO dir `C:\iVentoy\iso`,
   ports UDP 67-69, TCP 16000 (HTTP), TCP 26000 (UI, loopback-only firewall rule).
-- SyncSource: `\\argyle-unraid\SmartDeploy` → robocopy mirror of Images\ and
+- SyncSource: `\\SOURCE-SERVER\SmartDeploy` (site-specific; set in config.local.psd1) → robocopy mirror of Images\ and
   Platform Packs\ into SharePath. /MIR is destructive on the destination —
   sync-images.ps1 must require -Confirm or -Force for the first mirror.
 

@@ -262,7 +262,7 @@ this file.
 | `SubDirs` | Subdirectories created under `Path` | `Images`, `Platform Packs`, `Answer Files` | Add subdirectories if your SmartDeploy deployment requires them |
 
 **Work PC note on `Share.Path`:** At home the source is on Unraid
-(`\\argyle-unraid\SmartDeploy`) and the data is mirrored locally into
+(`\\SOURCE-SERVER\SmartDeploy`) and the data is mirrored locally into
 `D:\SDShare`. At the office the data is already on D: (`D:\SmartDeploy`).
 You have two options:
 
@@ -277,7 +277,7 @@ You have two options:
 
 | Key | Purpose | Default | When to change |
 |-----|---------|---------|----------------|
-| `Source` | UNC path of the SmartDeploy source share (robocopy origin) | `\\argyle-unraid\SmartDeploy` | Change to the UNC path reachable from the office, or leave it if you chose Option A above and do not sync |
+| `Source` | UNC path of the SmartDeploy source share (robocopy origin) | `\\SOURCE-SERVER\SmartDeploy` | Change to the UNC path reachable from the office, or leave it if you chose Option A above and do not sync |
 | `Include` | Folder names to sync from Source into Share.Path | `Images`, `Platform Packs` | Add folders if you need to mirror additional SmartDeploy directories |
 
 #### Firewall section
@@ -580,7 +580,7 @@ Get-LocalUser -Name 'sddeploy'
 - If sddeploy account is missing: re-run `.\setup.ps1`.
 - If images are absent from `D:\SDShare\Images\`: run
   `.\sync-images.ps1 -Force` (from the home network where
-  `\\argyle-unraid\SmartDeploy` is reachable), or copy images manually to
+  `\\SOURCE-SERVER\SmartDeploy` is reachable), or copy images manually to
   `D:\SDShare\Images\`.
 - If you changed `Share.Path` to `D:\SmartDeploy`: confirm the ACL on that
   path includes sddeploy ReadAndExecute.
@@ -757,7 +757,7 @@ When SmartDeploy images or Platform Packs are updated on Unraid, sync
 the local share:
 
 ```powershell
-# From an elevated prompt on the home network (\\argyle-unraid reachable):
+# From an elevated prompt on the home network (\\SOURCE-SERVER reachable):
 Set-Location C:\PXEForge\src
 .\sync-images.ps1 -Force
 ```
@@ -765,7 +765,7 @@ Set-Location C:\PXEForge\src
 This runs `robocopy /MIR` for each folder listed in `Sync.Include`
 (`Images` and `Platform Packs`). `/MIR` is destructive on the destination:
 files present in `D:\SDShare\Images\` that are absent from
-`\\argyle-unraid\SmartDeploy\Images\` will be deleted. The `-Force` switch
+`\\SOURCE-SERVER\SmartDeploy\Images\` will be deleted. The `-Force` switch
 is required precisely because of this destructive behavior — it cannot run
 unattended without it.
 
