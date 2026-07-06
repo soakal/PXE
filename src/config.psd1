@@ -36,4 +36,20 @@
 
     # ── Logging ───────────────────────────────────────────
     LogDir = 'C:\ProgramData\PXEForge\Logs'
+
+    # ── TinyPXE fallback (M4) ─────────────────────────────
+    # Used when iVentoy DHCP is unavailable (e.g. isolated staging switch).
+    # Serves Microsoft-signed bootmgfw.efi over TFTP so Secure Boot is satisfied.
+    TinyPxe = @{
+        InstallRoot = 'C:\TinyPXE'
+        Exe         = 'C:\TinyPXE\pxesrv.exe'
+        ConfigFile  = 'C:\TinyPXE\config.ini'
+        TftpRoot    = 'C:\TinyPXE\files'
+        ServiceName = 'TinyPXE'
+        BcdPath     = 'Boot\BCD'           # relative to TftpRoot
+        BootWim     = 'Boot\boot.wim'      # relative to TftpRoot; ramdisk source
+        SourceEfi   = 'C:\Windows\Boot\EFI\bootmgfw.efi'
+        SourceSdi   = 'C:\Windows\Boot\DVD\EFI\en-US\boot.sdi'
+        BootTimeout = 5                    # seconds; BCD bootmgr timeout
+    }
 }
