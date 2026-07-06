@@ -23,7 +23,7 @@ $denyPatterns = @(
 
 foreach ($p in $denyPatterns) {
     if ($cmd -match $p) {
-        [Console]::Error.WriteLine("BLOCKED by PXEForge contract: command matches deny pattern '$p'. Host mutation is forbidden during the loop — mock it in Pester instead. See CLAUDE.md Hard Rules.")
+        [Console]::Error.WriteLine("BLOCKED by PXEForge contract: command matches deny pattern '$p'. Host mutation is forbidden during the loop - mock it in Pester instead. See CLAUDE.md Hard Rules.")
         exit 2
     }
 }

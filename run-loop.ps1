@@ -2,13 +2,13 @@
 
 <#
 .SYNOPSIS
-    Watchdog for the PXEForge council loop — drives unattended Claude Code iterations.
+    Watchdog for the PXEForge council loop - drives unattended Claude Code iterations.
 
 .DESCRIPTION
     Invokes claude.exe headless once per iteration with the Arbiter prompt. Stops on:
     STOP file at repo root, loop-state.json status of AWAITING_HUMAN or blocked,
     -MaxIterations reached, or repeated CLI failures. Model comes from
-    .claude/settings.json — deliberately NOT passed via --model (CLI flag would
+    .claude/settings.json - deliberately NOT passed via --model (CLI flag would
     override the Opus pin).
 
 .PARAMETER MaxIterations
@@ -33,17 +33,21 @@ param(
     [ValidateRange(1, 10)]
     [int]$FailureLimit = 3,
 
-    [string]$LogPath = (Join-Path $PSScriptRoot ("loop-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss')))
+    [string]$LogPath
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+if (-not $LogPath) {
+    $LogPath = Join-Path $PSScriptRoot ("loop-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+}
+
 function Write-Log {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory, Position = 0)][string]$Message,
-        [ValidateSet('INFO','WARN','ERROR','SUCCESS')][string]$Level = 'INFO'
+        [Parameter(Position = 1)][ValidateSet('INFO','WARN','ERROR','SUCCESS')][string]$Level = 'INFO'
     )
     $entry = "[{0}] [{1}] {2}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Level, $Message
     switch ($Level) {
@@ -60,7 +64,7 @@ function Test-Prerequisites {
         throw 'claude CLI not found in PATH. Exit code 3.'
     }
     if (-not (Test-Path (Join-Path $PSScriptRoot 'CLAUDE.md'))) {
-        throw 'CLAUDE.md missing — run from the PXEForge repo root.'
+        throw 'CLAUDE.md missing - run from the PXEForge repo root.'
     }
 }
 
@@ -88,16 +92,19 @@ try {
     for ($i = 1; $i -le $MaxIterations; $i++) {
 
         if (Test-Path (Join-Path $PSScriptRoot 'STOP')) {
-            Write-Log 'STOP file found — halting.' 'WARN'; break
+            Write-Log 'STOP file found - halting.' 'WARN'; break
         }
         $status = Get-LoopStatus
         if ($status -in @('AWAITING_HUMAN', 'blocked')) {
-            Write-Log "loop-state status is '$status' — halting for operator." 'SUCCESS'; break
+            Write-Log "loop-state status is '$status' - halting for operator." 'SUCCESS'; break
         }
 
-        Write-Log "── Iteration $i / $MaxIterations ──"
+        Write-Log "-- Iteration $i / $MaxIterations --"
+        $prevEAP = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
         & claude -p $arbiterPrompt --permission-mode acceptEdits 2>&1 |
             Tee-Object -FilePath $LogPath -Append | Out-Host
+        $ErrorActionPreference = $prevEAP
 
         if ($LASTEXITCODE -ne 0) {
             $failures++
