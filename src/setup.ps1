@@ -290,7 +290,7 @@ function Install-IVentoyService {
         Write-Log "iVentoy install root '$installRoot' already populated — skipping extraction." 'INFO'
     }
 
-    $exePath = Get-ChildItem -Path $installRoot -Filter 'iventoy.exe' -Recurse `
+    $exePath = Get-ChildItem -Path $installRoot -Filter 'iVentoy_64.exe' -Recurse `
         -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
 
     if (-not $exePath) {
