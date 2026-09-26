@@ -84,7 +84,9 @@ the `New-Service` call will fail with a "binary path not found" error.
   see the [iVentoy auto-start on boot](#iventoy-auto-start-on-boot)
   instructions in Setup) and does not conflict.
 - Field mode: bring a dedicated staging switch. iVentoy will hand out IPs
-  on the isolated network. No DHCP server on that switch.
+  on the isolated network. No DHCP server on that switch. Before returning
+  this host to a network with an existing DHCP server, see the switchback
+  warning under [Field mode](#field-mode) in Setup.
 
 ---
 
@@ -258,6 +260,26 @@ the service registration is skipped (idempotent). The effective iVentoy DHCP
 mode and boot file come from `data\config.dat` set during interactive setup —
 not from the `-Mode` parameter. To change the DHCP mode, re-run iVentoy
 interactively, update the settings, restart the service.
+
+> **Warning — switching back to a live network:** Before reconnecting this
+> host to any network that already has a DHCP server (such as the office LAN
+> with the UDM Pro Max), you must manually switch iVentoy back to LAN mode
+> first. The iVentoy service starts automatically at boot — before anyone
+> logs in — and simply reads whatever mode is stored in `data\config.dat`;
+> `.\setup.ps1` will not help here, since once the service is already
+> installed it just logs "already installed" and skips. First run
+> `Stop-Service -Name 'iVentoy'` — the interactive GUI binds the same ports
+> as the running service and cannot start while it still holds them. Then
+> run iVentoy interactively, set DHCP mode back to **ProxyNet**, click
+> **Start** to confirm it shows **RUNNING**, close the GUI, then run
+> `Restart-Service -Name 'iVentoy'`. Skipping this step means the host comes
+> back up as a full DHCP server on the production LAN. If you instead ran
+> the TinyPXE fallback with `.\pxe-fallback.ps1 -Mode Field`, re-run
+> `.\pxe-fallback.ps1` with no `-Mode` flag first, so `config.ini` goes back
+> to `ProxyDHCP=1`, then run `Restart-Service -Name 'TinyPXE'` — the
+> running process only reads `config.ini` at startup, so the rewritten file
+> has no effect until the service is restarted — before reconnecting to a
+> normal network.
 
 ### Choosing between LAN and Field
 
