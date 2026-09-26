@@ -591,9 +591,22 @@ performs a PXE boot, fetches the bootloader over TFTP, and chainloads
 into iVentoy's boot environment, which then presents the ISO menu.
 
 If the target laptop has Secure Boot enabled, iVentoy must serve a
-Microsoft-signed bootloader. iVentoy 1.0.37 includes a signed chain;
-confirm Secure Boot is enabled or disabled in UEFI settings according to
-your SmartDeploy environment's requirements.
+Microsoft-signed bootloader. iVentoy added Secure Boot support in 1.0.40
+(2026-09-03); this repo targets 1.0.44 (see Prerequisites), which includes it.
+iVentoy exposes two Secure Boot modes, configured directly in iVentoy's own
+settings (not by this repo's scripts):
+
+- **Standard** — serves a Microsoft-signed boot chain. No client-side action
+  is needed; recommended starting mode.
+- **ByPass** — serves an iVentoy-signed boot chain that requires a one-time
+  MOK (Machine Owner Key) enrollment on each laptop before it will boot.
+
+This is a server-wide setting in iVentoy, not a per-laptop choice — it applies
+to every PXE client that boots against this iVentoy instance. Start with
+Standard mode. If Standard mode fails Secure Boot validation on a laptop,
+switch iVentoy to ByPass mode; from that point every laptop that PXE-boots,
+including ones that worked fine under Standard, will need the one-time MOK
+enrollment before it can boot.
 
 If iVentoy's boot chain is rejected by Secure Boot, fall back to the
 TinyPXE path (see Troubleshooting — Secure Boot rejecting the PXE bootloader).
@@ -817,8 +830,19 @@ simply reboots without presenting the iVentoy menu.
 
 **Fix:** Use the TinyPXE fallback, which serves `bootmgfw.efi` — the
 Microsoft-signed Windows boot manager, already present on the host at
-`C:\Windows\Boot\EFI\bootmgfw.efi`. Because Microsoft's key is in every
-UEFI Secure Boot trust database, no key enrollment is needed.
+`C:\Windows\Boot\EFI\bootmgfw.efi`. Microsoft's key is in most UEFI Secure
+Boot trust databases, so key enrollment is usually not needed — but this
+depends on which certificate generation signed the two sides.
+
+**Certificate rotation note:** Microsoft is migrating Secure Boot signing
+from the 2011 certificates to the 2023 certificates, and the Windows PCA
+2011 certificate expires 2026-10-19. If the host's `bootmgfw.efi` is signed
+under one certificate generation and the target laptop's firmware trust
+database only has the other generation loaded, the TinyPXE fallback will be
+rejected too — not just the primary iVentoy path. The symptom looks the
+same as the original problem (a Secure Boot violation or silent reboot, now
+on the fallback boot attempt). The usual fix is a firmware/BIOS update on
+the laptop from its OEM to add the 2023 certificate to its trust database.
 
 **Step 1 — Install TinyPXE Server** (skip if already done in Prerequisites):
 
