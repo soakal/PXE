@@ -70,6 +70,20 @@ function Test-IsElevated {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Initialize-LogDirectory {
+    # Log writes are ErrorAction SilentlyContinue (never fatal), so without this
+    # the very first run silently produces no log file at all — nothing failed,
+    # nothing was recorded either. Must run before the first Write-Log call.
+    [CmdletBinding(SupportsShouldProcess)]
+    param()
+    $logDir = Split-Path -Path $LogPath -Parent
+    if ($logDir -and -not (Test-Path -Path $logDir)) {
+        if ($PSCmdlet.ShouldProcess($logDir, 'Create log directory')) {
+            New-Item -Path $logDir -ItemType Directory -Force | Out-Null
+        }
+    }
+}
+
 function Test-Prerequisites {
     [CmdletBinding()]
     param()
@@ -141,6 +155,16 @@ function Install-ServiceAccount {
             -PasswordNeverExpires -UserMayNotChangePassword `
             -Description 'PXEForge read-only share service account' | Out-Null
         Write-Log "Service account '$account' created." 'INFO'
+
+        # Shown on console only — never passed to Write-Log/Add-Content, so it
+        # never lands in the persisted log file. This is the only time it's
+        # visible; SmartPE needs it to mount \\host\SDShare as this account.
+        $plainPwd = [System.Net.NetworkCredential]::new('', $secPwd).Password
+        Write-Host ''
+        Write-Host "[ACTION REQUIRED] Record this now — shown once, not logged:" -ForegroundColor Yellow
+        Write-Host "  Account:  $account"
+        Write-Host "  Password: $plainPwd"
+        Write-Host ''
     }
 }
 
@@ -152,10 +176,12 @@ function Install-ImageShare {
     $name    = $script:Config.Share.Name
     $account = $script:Config.Share.ServiceAccount
 
-    if (-not (Test-Path -Path $path)) {
+    $pathExists = Test-Path -Path $path
+    if (-not $pathExists) {
         if ($PSCmdlet.ShouldProcess($path, 'Create share root directory')) {
             New-Item -Path $path -ItemType Directory -Force | Out-Null
             Write-Log "Created directory '$path'." 'INFO'
+            $pathExists = $true
         }
     } else {
         Write-Log "Directory '$path' already exists — skipping." 'INFO'
@@ -178,6 +204,13 @@ function Install-ImageShare {
     } elseif ($PSCmdlet.ShouldProcess($name, 'Create SMB share')) {
         New-SmbShare -Name $name -Path $path -ReadAccess $account | Out-Null
         Write-Log "SMB share '$name' created (ReadAccess: $account)." 'INFO'
+    }
+
+    if (-not $pathExists) {
+        # Only reachable under -WhatIf, where the directory creation above was
+        # a preview, not a real write — nothing to ACL-check yet.
+        Write-Log "'$path' does not exist yet (WhatIf preview) — skipping ACL check." 'INFO'
+        return
     }
 
     $acl         = Get-Acl -Path $path
@@ -348,6 +381,7 @@ function Install-IVentoyService {
 # ── Main ── (only runs when executed, not when dot-sourced by Pester)
 if ($MyInvocation.InvocationName -ne '.') {
     try {
+        Initialize-LogDirectory
         Write-Log "=== PXEForge setup v0.1.0 started (Mode: $Mode) ==="
         Test-Prerequisites
         Install-ServiceAccount

@@ -3,7 +3,8 @@
     IVentoy = @{
         Version     = '1.0.44'
         InstallRoot = 'C:\iVentoy'
-        IsoDir      = 'C:\iVentoy\iso'
+        IsoDir      = 'C:\iVentoy\iso'  # pre-extraction fallback only; validate.ps1 derives the real,
+                                        # version-coupled path (InstallRoot\iventoy-<version>\iso) at runtime
         # Operator must download iVentoy zip and place it here before running setup.ps1
         ZipPath     = 'C:\ProgramData\PXEForge\iventoy_64.zip'
         HttpPort    = 16000

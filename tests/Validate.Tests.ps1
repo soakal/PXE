@@ -135,17 +135,23 @@ Describe 'Test-IsoPresent' {
         Mock Write-Host      {}
         Mock Add-Content     {}
         Mock Test-IsElevated { $true }
+        # Get-IVentoyIsoDir's exe discovery — same real nested layout as setup.ps1's own lookup.
+        Mock Get-ChildItem {
+            [PSCustomObject]@{
+                FullName = Join-Path (Join-Path $script:Config.IVentoy.InstallRoot 'iventoy-1.0.44') 'iVentoy_64.exe'
+            }
+        } -ParameterFilter { $Filter -eq 'iVentoy_64.exe' }
     }
 
     It 'returns true when exactly one ISO is present (PASS)' {
         Mock Get-ChildItem {
-            [PSCustomObject]@{ Name = 'SmartPE.iso'; FullName = (Join-Path $script:Config.IVentoy.IsoDir 'SmartPE.iso') }
-        }
+            [PSCustomObject]@{ Name = 'SmartPE.iso'; FullName = 'SmartPE.iso' }
+        } -ParameterFilter { $Filter -eq '*.iso' }
         Test-IsoPresent | Should -BeTrue
     }
 
     It 'returns false when no ISOs are present (FAIL — 0 ISOs)' {
-        Mock Get-ChildItem {}
+        Mock Get-ChildItem {} -ParameterFilter { $Filter -eq '*.iso' }
         Test-IsoPresent | Should -BeFalse
     }
 
@@ -155,14 +161,34 @@ Describe 'Test-IsoPresent' {
                 [PSCustomObject]@{ Name = 'SmartPE.iso' },
                 [PSCustomObject]@{ Name = 'SmartPE-old.iso' }
             )
-        }
+        } -ParameterFilter { $Filter -eq '*.iso' }
         Test-IsoPresent | Should -BeTrue
     }
 
-    It 'calls Get-ChildItem exactly once per run' {
-        Mock Get-ChildItem {}
+    It 'calls Get-ChildItem exactly twice per run (exe discovery + ISO listing)' {
+        Mock Get-ChildItem {} -ParameterFilter { $Filter -eq '*.iso' }
         Test-IsoPresent
-        Should -Invoke Get-ChildItem -Exactly 1 -Scope It
+        Should -Invoke Get-ChildItem -Exactly 2 -Scope It
+    }
+
+    It 'derives the ISO directory from the discovered exe location, not the static config default' {
+        Mock Get-ChildItem {
+            [PSCustomObject]@{ Name = 'SmartPE.iso'; FullName = 'SmartPE.iso' }
+        } -ParameterFilter { $Filter -eq '*.iso' }
+        Test-IsoPresent | Out-Null
+        $expectedIsoDir = Join-Path (Join-Path $script:Config.IVentoy.InstallRoot 'iventoy-1.0.44') 'iso'
+        Should -Invoke Get-ChildItem -Exactly 1 -Scope It -ParameterFilter {
+            $Filter -eq '*.iso' -and $Path -eq $expectedIsoDir
+        }
+    }
+
+    It 'falls back to the configured IsoDir default when iVentoy has not been extracted yet' {
+        Mock Get-ChildItem {} -ParameterFilter { $Filter -eq 'iVentoy_64.exe' }
+        Mock Get-ChildItem {} -ParameterFilter { $Filter -eq '*.iso' }
+        Test-IsoPresent | Out-Null
+        Should -Invoke Get-ChildItem -Exactly 1 -Scope It -ParameterFilter {
+            $Filter -eq '*.iso' -and $Path -eq $script:Config.IVentoy.IsoDir
+        }
     }
 }
 

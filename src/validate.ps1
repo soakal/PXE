@@ -69,6 +69,24 @@ function Test-IsElevated {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Get-IVentoyIsoDir {
+    # IVentoy.IsoDir in config.psd1 is a pre-extraction fallback default only —
+    # the real path is version-coupled (the vendor zip extracts into a nested
+    # iventoy-<version>\ folder) and drifts on every version bump. Derive it
+    # from wherever iVentoy_64.exe actually landed, the same way setup.ps1's
+    # Install-IVentoyService locates it. Falls back to the configured default
+    # when iVentoy hasn't been extracted yet (nothing to derive from).
+    [CmdletBinding()]
+    param()
+    $installRoot = $script:Config.IVentoy.InstallRoot
+    $exePath = Get-ChildItem -Path $installRoot -Filter 'iVentoy_64.exe' -Recurse `
+        -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+    if ($exePath) {
+        return (Join-Path (Split-Path $exePath -Parent) 'iso')
+    }
+    return $script:Config.IVentoy.IsoDir
+}
+
 # Check 1: UDP and TCP ports have active listeners.
 function Test-PortsListening {
     [CmdletBinding()]
@@ -133,7 +151,7 @@ function Test-ServiceState {
 function Test-IsoPresent {
     [CmdletBinding()]
     param()
-    $isoDir = $script:Config.IVentoy.IsoDir
+    $isoDir = Get-IVentoyIsoDir
     $isos   = @(Get-ChildItem -Path $isoDir -Filter '*.iso' -ErrorAction SilentlyContinue)
     $count  = $isos.Count
     if ($count -ge 1) {

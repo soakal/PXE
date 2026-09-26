@@ -53,9 +53,15 @@ appliance in production. Do not assume a Pro license is already held.
 
 ### SmartDeploy SmartPE ISO
 
-You need a SmartPE ISO generated from the SmartDeploy console. Exactly one
-ISO must be placed in `C:\iVentoy\iso` (the `IVentoy.IsoDir`) before
-`validate.ps1` will pass its ISO-count check.
+You need a SmartPE ISO generated from the SmartDeploy console. `IVentoy.IsoDir`
+in `config.psd1` (`C:\iVentoy\iso`) is a fallback default only — the real
+directory iVentoy scans is version-coupled, because the vendor zip extracts
+into a nested folder: `C:\iVentoy\iventoy-<version>\iso` (e.g.
+`C:\iVentoy\iventoy-1.0.44\iso`). Place exactly one ISO in that nested `iso`
+folder, not the top-level `C:\iVentoy\iso`. `validate.ps1` derives this same
+path automatically (from wherever `iVentoy_64.exe` actually landed) when it
+runs its ISO-count check, so its PASS/FAIL log line always shows the real
+directory it checked if you're unsure.
 
 ### TinyPXE Server (fallback path only)
 
@@ -158,6 +164,17 @@ This is the LAN-mode default. For Field mode see the Setup section.
 [2026-07-06 09:15:03] [WARN] iVentoy config.dat not found at 'C:\iVentoy\iventoy-1.0.44\data\config.dat'. Run iVentoy interactively once (elevated): launch iVentoy_64.exe, set Server IP, IP pool, DHCP mode (ProxyNet), Secure Boot mode, UEFI boot file (snp.efi), click Start to confirm RUNNING, then close. This creates data\config.dat. Re-run setup.ps1 after that.
 [2026-07-06 09:15:03] [SUCCESS] === Completed successfully ===
 ```
+
+> **Note (not shown in the transcript above, which predates this fix):**
+> right after `Service account 'sddeploy' created.`, the console now prints
+> the account's generated password **once**, on its own lines, prefixed
+> `[ACTION REQUIRED]`. It is never written to the log file. Record it
+> immediately — you'll need it for `net use \\<host>\SDShare /user:sddeploy`
+> when configuring SmartPE (see Troubleshooting). If you miss it, don't
+> re-run `setup.ps1` to get it again (the account already exists, so it will
+> skip account creation) — instead run
+> `Set-LocalUser -Name sddeploy -Password (Read-Host -AsSecureString)` to set
+> a new one.
 
 `setup.ps1` exits 0 even when service registration is skipped — only the
 `data\config.dat` precondition determines whether the service is registered.
@@ -391,7 +408,7 @@ this file.
 |-----|---------|---------|----------------|
 | `Version` | iVentoy version string (informational, used in log warnings) | `1.0.44` | Only when upgrading iVentoy |
 | `InstallRoot` | Directory iVentoy is extracted into | `C:\iVentoy` | If you need iVentoy on a different drive |
-| `IsoDir` | Directory iVentoy scans for ISOs to serve | `C:\iVentoy\iso` | If you change InstallRoot |
+| `IsoDir` | Pre-extraction fallback only — `validate.ps1` derives the real, version-coupled path (`InstallRoot\iventoy-<version>\iso`) from wherever `iVentoy_64.exe` actually landed; this key is only used before iVentoy has been extracted | `C:\iVentoy\iso` | Rarely — the effective path is auto-derived; changing this only affects the pre-extraction fallback |
 | `ZipPath` | Full path where setup expects the downloaded iVentoy zip | `C:\ProgramData\PXEForge\iventoy_64.zip` | If you store the zip elsewhere; must match your actual download location |
 | `HttpPort` | TCP port for iVentoy's HTTP API | `16000` | If another service binds 16000 |
 | `UiPort` | TCP port for iVentoy's management UI (loopback-only firewall rule) | `26000` | If another service binds 26000 |
@@ -758,6 +775,10 @@ Get-LocalUser -Name 'sddeploy'
 
 **Fix:**
 
+- If `net use` fails with a logon error: you need the sddeploy password
+  shown once when `setup.ps1` first created the account (see Install, "Run
+  setup.ps1"). If you didn't record it, set a new one:
+  `Set-LocalUser -Name sddeploy -Password (Read-Host -AsSecureString)`.
 - If the share is missing: re-run `.\setup.ps1` (idempotent).
 - If sddeploy account is missing: re-run `.\setup.ps1`.
 - If images are absent from `D:\SDShare\Images\`: run

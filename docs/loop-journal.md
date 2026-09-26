@@ -505,3 +505,80 @@ this environment.
 service registration, ISO placement, `validate.ps1`, or PXE-booting a
 Secure-Boot-enabled test laptop — has been performed. Status remains
 `AWAITING_HUMAN` pending Brian's manual run and sign-off.
+
+## 2026-09-26 — pre-run hardening (independent review + direct fixes)
+
+Before running `setup.ps1` for real, Brian asked for an independent
+model review of it (via a separate general-purpose review, not the council
+loop's own Realist) to catch anything a real Windows run could hit. That
+review, cross-checked line-by-line against the actual source before acting
+on any of it, found four real issues; all four were fixed directly in this
+session (not via `/council-cycle` — a live, interactive fix session at
+Brian's request) and verified against a real filesystem where the platform
+allowed it, not just by reading the diff:
+
+1. **Finding D resolved — durable `IsoDir` derivation.** `IVentoy.IsoDir` in
+   `config.psd1` was a static, version-coupled path (`C:\iVentoy\iso`) that
+   goes stale on every iVentoy version bump, because the vendor zip actually
+   extracts into a nested `iventoy-<version>\` folder. `validate.ps1` gained
+   `Get-IVentoyIsoDir`, which derives the real ISO directory from wherever
+   `iVentoy_64.exe` actually landed (the same discovery pattern
+   `Install-IVentoyService` already used in `setup.ps1`), falling back to the
+   configured default only when iVentoy hasn't been extracted yet.
+   `config.psd1`'s `IsoDir` comment and the guide's Configure table + ISO
+   placement instructions updated to describe it as a pre-extraction
+   fallback rather than the authoritative path. Verified against a real
+   temp-directory layout mimicking the actual nested extraction (Linux
+   filesystem, no mocks) — correctly derives the nested path when the exe is
+   found, correctly falls back to the config default when it isn't.
+2. **sddeploy password no longer silently discarded.** `Install-ServiceAccount`
+   generated a random 24-char password for the `sddeploy` service account and
+   discarded it — nothing recorded it anywhere, so SmartPE had no way to
+   mount `\\host\SDShare`. Now printed once to console only
+   (`[ACTION REQUIRED]`, never routed through `Write-Log`/`Add-Content`, so
+   it never lands in the persisted log file). Guide's setup-output walkthrough
+   and the share-troubleshooting section both updated with the one-time
+   `Set-LocalUser -Password` recovery path if it's missed. Verified against a
+   real run (stubbed `Get-LocalUser`/`New-LocalUser` only, everything else
+   real) — password appears in captured console output, absent from the
+   written log file.
+3. **Log directory now created before first write.** `Write-Log` appends to
+   `$LogDir` via `Add-Content -ErrorAction SilentlyContinue`, but nothing
+   ever created `C:\ProgramData\PXEForge\Logs` — the first real run's log
+   file would have silently never existed. New `Initialize-LogDirectory`
+   (same `ShouldProcess`-gated idempotent pattern as every other
+   host-mutating step in this script) runs first, before the startup banner
+   log line. Verified against a real temp directory — log file exists and
+   is written after the fix; did not before.
+4. **`-WhatIf` no longer throws a false failure on a fresh box.**
+   `Install-ImageShare`'s NTFS ACL check called `Get-Acl -Path $path`
+   unconditionally right after the (ShouldProcess-gated, so skipped under
+   `-WhatIf`) directory-creation step — under `-WhatIf` on a box with no
+   pre-existing `D:\SDShare`, this threw on a path that was never actually
+   created, even though nothing was actually wrong. Guarded with a local
+   `$pathExists` flag set when the real (non-preview) creation happens, so
+   the ACL check is skipped only when there's genuinely nothing to check.
+   Verified against a real filesystem: `-WhatIf` run no longer throws and
+   never calls `Get-Acl`; a normal run still creates the directory and
+   reaches `Get-Acl` exactly as before.
+
+`tests/Setup.Tests.ps1` and `tests/Validate.Tests.ps1` gained Pester 5
+coverage for all four (new `Initialize-LogDirectory` Describe block; new
+password-visibility Its on `Install-ServiceAccount`; new `-WhatIf` Its on
+`Install-ImageShare`; `Test-IsoPresent`'s Its updated for the two-call
+`Get-ChildItem` pattern, `ParameterFilter`ed on the real vs. fallback path)
+— written and reasoned through, but this environment's `Invoke-Pester` still
+cannot execute against these scripts for real (same pre-existing Windows
+drive-letter/cmdlet limitation as every prior entry in this file; confirmed
+again this session, unchanged). In its place: `Invoke-ScriptAnalyzer -Path
+src -Recurse -Severity Error` clean, `Invoke-Pester -Path tests/Docs.Tests.ps1
+-CI` 3/3, and — because a real production run was imminent — direct,
+unmocked smoke tests of the new logic against a real Linux filesystem with
+Linux-style paths (a throwaway `-ConfigPath`, not the committed config),
+stubbing only the genuinely Windows-only cmdlets (`Get-SmbShare`,
+`New-SmbShare`, `New-LocalUser`, `Get-Acl`/`Set-Acl`'s ACL construction).
+All four fixes behaved exactly as intended under real execution, not just
+static review.
+
+`loop-state.json`: `status` still exactly `AWAITING_HUMAN`, unchanged.
+**The physical PXE boot has still NOT been attempted.**

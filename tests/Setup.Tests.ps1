@@ -78,6 +78,26 @@ Describe 'Test-Prerequisites' {
     }
 }
 
+Describe 'Initialize-LogDirectory' {
+    BeforeAll {
+        . $script:SetupPath
+        Mock Write-Host {}
+        Mock New-Item   {}
+    }
+
+    It 'creates the log directory when it does not exist' {
+        Mock Test-Path { $false }
+        Initialize-LogDirectory
+        Should -Invoke New-Item -Exactly 1 -Scope It -ParameterFilter { $ItemType -eq 'Directory' }
+    }
+
+    It 'skips creation when the log directory already exists (idempotency)' {
+        Mock Test-Path { $true }
+        Initialize-LogDirectory
+        Should -Invoke New-Item -Exactly 0 -Scope It
+    }
+}
+
 Describe 'Scaffold contract' {
     It 'setup.ps1 parses without errors' {
         $tokens = $errors = $null
@@ -129,6 +149,18 @@ Describe 'Install-ServiceAccount' {
         Install-ServiceAccount
         Install-ServiceAccount
         Should -Invoke New-LocalUser -Exactly 0 -Scope It
+    }
+
+    It 'shows the generated password on console only, never in the log' {
+        Install-ServiceAccount
+        Should -Invoke Write-Host  -Times 1 -Scope It -ParameterFilter { $Object -like '*Password:*' }
+        Should -Invoke Add-Content -Times 0 -Scope It -ParameterFilter { $Value  -like '*Password:*' }
+    }
+
+    It 'does not re-show a password when the account already exists (idempotency)' {
+        Mock Get-LocalUser { [PSCustomObject]@{ Name = $script:Config.Share.ServiceAccount } }
+        Install-ServiceAccount
+        Should -Invoke Write-Host -Times 0 -Scope It -ParameterFilter { $Object -like '*Password:*' }
     }
 }
 
@@ -194,6 +226,15 @@ Describe 'Install-ImageShare' {
     It 'calls Get-Acl exactly once per run' {
         Install-ImageShare
         Should -Invoke Get-Acl -Exactly 1 -Scope It
+    }
+
+    It 'skips the ACL check under -WhatIf on a fresh box (no false failure)' {
+        # Under -WhatIf, ShouldProcess is false so New-Item is skipped and the
+        # directory never actually exists — Get-Acl must not be called on it.
+        Mock Test-Path { $false }
+        Install-ImageShare -WhatIf
+        Should -Invoke Get-Acl -Exactly 0 -Scope It
+        Should -Invoke Set-Acl -Exactly 0 -Scope It
     }
 }
 
