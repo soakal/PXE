@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/deny-host-mutation.ps1"
+            "command": "pwsh -NoProfile -File .claude/hooks/deny-host-mutation.ps1"
           }
         ]
       }

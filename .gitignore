@@ -1,3 +1,9 @@
 *.log
 config.local.psd1
 testResults.xml
+
+# council-loop plugin run-state (local only, never committed)
+.council/config.json
+.council/state/*
+!.council/state/.gitkeep
+.council/config.local.json
