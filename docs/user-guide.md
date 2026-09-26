@@ -315,8 +315,10 @@ In the iVentoy GUI:
 3. Set **DHCP mode** to **ProxyNet** (the proven working mode for LAN operation
    with a UDM Pro Max or similar router handling existing DHCP).
 4. Set **UEFI boot file** to `snp.efi`.
-5. Click **Start** and confirm the status shows **RUNNING**.
-6. Close the iVentoy window.
+5. Set **Secure Boot mode** to **Standard** — this must match `IVentoy.SecureBootMode`
+   in `config.psd1` (see Configure — IVentoy section and First deployment Step 4).
+6. Click **Start** and confirm the status shows **RUNNING**.
+7. Close the iVentoy window.
 
 This writes all parameters to `C:\iVentoy\iventoy-1.0.44\data\config.dat`. The
 service reads this file at startup and serves headless — no GUI window, starts
@@ -644,7 +646,16 @@ to every PXE client that boots against this iVentoy instance. Start with
 Standard mode. If Standard mode fails Secure Boot validation on a laptop,
 switch iVentoy to ByPass mode; from that point every laptop that PXE-boots,
 including ones that worked fine under Standard, will need the one-time MOK
-enrollment before it can boot.
+enrollment before it can boot. The iVentoy service is already installed and
+running at this point, so switching modes means stopping the service,
+changing the setting in the GUI, and restarting the service — the same
+sequence, and for the same port-binding reason, as the "switching back to a
+live network" warning in the [Field mode](#field-mode) section:
+`Stop-Service -Name 'iVentoy'`, run iVentoy interactively, change **Secure
+Boot mode** to **ByPass**, click **Start** to confirm **RUNNING**, close the
+GUI, then `Restart-Service -Name 'iVentoy'`, and update `SecureBootMode` to `'ByPass'`
+in `src\config.psd1` (IVentoy section) so it continues to match (see
+Configure — IVentoy section).
 
 If iVentoy's boot chain is rejected by Secure Boot, fall back to the
 TinyPXE path (see Troubleshooting — Secure Boot rejecting the PXE bootloader).
