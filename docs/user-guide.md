@@ -29,7 +29,7 @@ Meet every item on this list **before** running any script.
   `Share.Path` at `D:\SmartDeploy` directly or keep a separate `D:\SDShare`
   mirror destination.
 
-### iVentoy 1.0.37
+### iVentoy 1.0.44
 
 Download the 64-bit iVentoy zip for Windows. The file must be placed at
 this exact path before running `setup.ps1`:
@@ -92,7 +92,7 @@ Files land under `C:\PXEForge\`. The two directories you use directly are
 
 ### 2. Place the iVentoy zip
 
-Before running setup, copy the iVentoy 1.0.37 zip to:
+Before running setup, copy the iVentoy 1.0.44 zip to:
 
 ```
 C:\ProgramData\PXEForge\iventoy_64.zip
@@ -142,7 +142,7 @@ This is the LAN-mode default. For Field mode see the Setup section.
 [2026-07-06 09:15:02] [INFO] DC standby disabled (timeout=0).
 [2026-07-06 09:15:02] [INFO] Hibernate disabled.
 [2026-07-06 09:15:03] [INFO] iVentoy extracted to 'C:\iVentoy'.
-[2026-07-06 09:15:03] [WARN] iVentoy config.dat not found at 'C:\iVentoy\iventoy-1.0.37\data\config.dat'. Run iVentoy interactively once (elevated): launch iVentoy_64.exe, set Server IP, IP pool, DHCP mode (ProxyNet), UEFI boot file (snp.efi), click Start to confirm RUNNING, then close. This creates data\config.dat. Re-run setup.ps1 after that.
+[2026-07-06 09:15:03] [WARN] iVentoy config.dat not found at 'C:\iVentoy\iventoy-1.0.44\data\config.dat'. Run iVentoy interactively once (elevated): launch iVentoy_64.exe, set Server IP, IP pool, DHCP mode (ProxyNet), UEFI boot file (snp.efi), click Start to confirm RUNNING, then close. This creates data\config.dat. Re-run setup.ps1 after that.
 [2026-07-06 09:15:03] [SUCCESS] === Completed successfully ===
 ```
 
@@ -221,7 +221,7 @@ in **ProxyNet** DHCP mode (configured interactively — see
 [iVentoy auto-start on boot](#iventoy-auto-start-on-boot) below) with
 UEFI boot file `snp.efi`. The `-Mode Lan` flag is informational; it is
 logged but does not control the service binary flags or the iVentoy DHCP
-mode, which are stored in `C:\iVentoy\iventoy-1.0.37\data\config.dat`.
+mode, which are stored in `C:\iVentoy\iventoy-1.0.44\data\config.dat`.
 
 ```powershell
 # From an elevated PowerShell prompt in C:\PXEForge\src\:
@@ -259,7 +259,7 @@ interactively, update the settings, restart the service.
 
 Before `setup.ps1` can register the iVentoy Windows service, iVentoy must be
 run interactively at least once to create its configuration file at
-`C:\iVentoy\iventoy-1.0.37\data\config.dat`. The vendor's `InstallService.bat`
+`C:\iVentoy\iventoy-1.0.44\data\config.dat`. The vendor's `InstallService.bat`
 has the same requirement — it aborts if `config.dat` is absent. If `setup.ps1`
 reaches the service registration step and `config.dat` does not exist, it logs a
 WARN and skips registration (exit 0 — not fatal). Re-run `setup.ps1` after the
@@ -270,7 +270,7 @@ interactive step below.
 From an elevated PowerShell prompt:
 
 ```powershell
-& 'C:\iVentoy\iventoy-1.0.37\iVentoy_64.exe'
+& 'C:\iVentoy\iventoy-1.0.44\iVentoy_64.exe'
 ```
 
 In the iVentoy GUI:
@@ -284,7 +284,7 @@ In the iVentoy GUI:
 5. Click **Start** and confirm the status shows **RUNNING**.
 6. Close the iVentoy window.
 
-This writes all parameters to `C:\iVentoy\iventoy-1.0.37\data\config.dat`. The
+This writes all parameters to `C:\iVentoy\iventoy-1.0.44\data\config.dat`. The
 service reads this file at startup and serves headless — no GUI window, starts
 before login.
 
@@ -304,13 +304,13 @@ Set-Location C:\PXEForge\src
 ```
 
 `setup.ps1` detects `config.dat`, registers the service with vendor-correct flags
-(`"C:\iVentoy\iventoy-1.0.37\iVentoy_64.exe" -Service -R`, `start=Automatic`),
+(`"C:\iVentoy\iventoy-1.0.44\iVentoy_64.exe" -Service -R`, `start=Automatic`),
 and the service starts automatically at boot before login with no window.
 
 Alternatively, use the vendor's `InstallService.bat` directly (elevated):
 
 ```powershell
-& 'C:\iVentoy\iventoy-1.0.37\InstallService.bat'
+& 'C:\iVentoy\iventoy-1.0.44\InstallService.bat'
 ```
 
 **Step 3 — Verify after reboot:**
@@ -353,7 +353,7 @@ this file.
 
 | Key | Purpose | Default | When to change |
 |-----|---------|---------|----------------|
-| `Version` | iVentoy version string (informational, used in log warnings) | `1.0.37` | Only when upgrading iVentoy |
+| `Version` | iVentoy version string (informational, used in log warnings) | `1.0.44` | Only when upgrading iVentoy |
 | `InstallRoot` | Directory iVentoy is extracted into | `C:\iVentoy` | If you need iVentoy on a different drive |
 | `IsoDir` | Directory iVentoy scans for ISOs to serve | `C:\iVentoy\iso` | If you change InstallRoot |
 | `ZipPath` | Full path where setup expects the downloaded iVentoy zip | `C:\ProgramData\PXEForge\iventoy_64.zip` | If you store the zip elsewhere; must match your actual download location |
@@ -655,7 +655,7 @@ Get-NetUDPEndpoint -LocalPort 67 -ErrorAction SilentlyContinue
   request but providing no PXE boot file, confirm iVentoy is configured in
   **ProxyNet** mode with UEFI boot file **snp.efi** (the proven working
   configuration). The service binary path ends in `-Service -R`; the effective
-  DHCP mode comes from `C:\iVentoy\iventoy-1.0.37\data\config.dat`. Verify the
+  DHCP mode comes from `C:\iVentoy\iventoy-1.0.44\data\config.dat`. Verify the
   registered binary path:
   ```powershell
   Get-WmiObject Win32_Service -Filter "Name='iVentoy'" | Select-Object PathName
@@ -757,7 +757,7 @@ The service starts but cannot bind to the configured IP.
 
 1. Re-run iVentoy interactively from an elevated prompt:
    ```powershell
-   & 'C:\iVentoy\iventoy-1.0.37\iVentoy_64.exe'
+   & 'C:\iVentoy\iventoy-1.0.44\iVentoy_64.exe'
    ```
 2. Verify **Server IP** matches the host's current static LAN IP.
 3. Confirm **DHCP mode** is **ProxyNet** and **UEFI boot file** is `snp.efi`.

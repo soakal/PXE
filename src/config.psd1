@@ -1,7 +1,7 @@
 @{
     # ── PXE / iVentoy ─────────────────────────────────────
     IVentoy = @{
-        Version     = '1.0.37'
+        Version     = '1.0.44'
         InstallRoot = 'C:\iVentoy'
         IsoDir      = 'C:\iVentoy\iso'
         # Operator must download iVentoy zip and place it here before running setup.ps1

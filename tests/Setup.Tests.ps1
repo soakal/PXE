@@ -89,7 +89,7 @@ Describe 'Scaffold contract' {
     }
     It 'config.psd1 imports and has required blocks' {
         $cfg = Import-PowerShellDataFile -Path $ConfigPath
-        $cfg.IVentoy.Version   | Should -Be '1.0.37'
+        $cfg.IVentoy.Version   | Should -Be '1.0.44'
         $cfg.Share.Path        | Should -Be 'D:\SDShare'
         $cfg.IVentoy.DhcpMode  | Should -BeIn @('ExternalNet', 'DHCPServer')
     }
@@ -262,7 +262,7 @@ Describe 'Install-IVentoyService' {
         Mock New-Service    {}
         Mock Get-ChildItem  {
             [PSCustomObject]@{
-                FullName = Join-Path (Join-Path $script:Config.IVentoy.InstallRoot 'iventoy-1.0.37') 'iVentoy_64.exe'
+                FullName = Join-Path (Join-Path $script:Config.IVentoy.InstallRoot 'iventoy-1.0.44') 'iVentoy_64.exe'
             }
         } -ParameterFilter { $Filter -eq 'iVentoy_64.exe' }
         $script:InstallRoot   = $script:Config.IVentoy.InstallRoot

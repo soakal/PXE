@@ -47,7 +47,7 @@ Arbiter merge checklist (all required):
 - DhcpMode: `ExternalNet` (LAN mode, UDM Pro Max keeps DHCP). `-Mode Field`
   switches to `DHCPServer` (isolated switch, iVentoy hands out IPs).
 - SharePath: `D:\SDShare`, service account `sddeploy` (read-only SMB + NTFS).
-- iVentoy: v1.0.37, install root `C:\iVentoy`, ISO dir `C:\iVentoy\iso`,
+- iVentoy: v1.0.44, install root `C:\iVentoy`, ISO dir `C:\iVentoy\iso`,
   ports UDP 67-69, TCP 16000 (HTTP), TCP 26000 (UI, loopback-only firewall rule).
 - SyncSource: `\\SOURCE-SERVER\SmartDeploy` (site-specific; set in config.local.psd1) → robocopy mirror of Images\ and
   Platform Packs\ into SharePath. /MIR is destructive on the destination —
@@ -61,7 +61,7 @@ Arbiter merge checklist (all required):
 | M2 | setup.ps1 full implementation: share + ACLs, sddeploy account, firewall rules, powercfg, iVentoy extract + service registration | Mocked Pester incl. idempotency test (invoke functions twice against mocked state) |
 | M3 | sync-images.ps1 + validate.ps1 (ports listening, ACL audit, service state, exactly one ISO present, share reachable) | Mocked Pester |
 | M4 | Tiny PXE Server fallback module (Secure-Boot-safe: bootmgfw.efi + BCD chain). Do NOT start before M3 is merged. | Pester |
-| M5 | **User documentation** — `docs/user-guide.md` written for an operator who has never seen this repo. Required sections: 1) Prerequisites (OS, D: volume, iVentoy 1.0.37 zip, SmartDeploy ISO media); 2) Install (extract, git, run setup.ps1 step-by-step with expected output); 3) Setup (LAN vs Field mode, when to use each, exact commands); 4) Configure (every config.psd1 key: purpose, default, when to change it; every script parameter with an example invocation); 5) First deployment walkthrough (ISO placement, Secure Boot, PXE boot, SmartPE); 6) Troubleshooting (no PXE offer, share unreachable, service won't start, port conflicts); 7) Maintenance (ISO regen after console upgrades, image sync). Exact commands with real paths throughout — no "navigate to" hand-waving. | Doc-coverage test (every config.psd1 key and every script param appears in the guide) + Realist review |
+| M5 | **User documentation** — `docs/user-guide.md` written for an operator who has never seen this repo. Required sections: 1) Prerequisites (OS, D: volume, iVentoy 1.0.44 zip, SmartDeploy ISO media); 2) Install (extract, git, run setup.ps1 step-by-step with expected output); 3) Setup (LAN vs Field mode, when to use each, exact commands); 4) Configure (every config.psd1 key: purpose, default, when to change it; every script parameter with an example invocation); 5) First deployment walkthrough (ISO placement, Secure Boot, PXE boot, SmartPE); 6) Troubleshooting (no PXE offer, share unreachable, service won't start, port conflicts); 7) Maintenance (ISO regen after console upgrades, image sync). Exact commands with real paths throughout — no "navigate to" hand-waving. | Doc-coverage test (every config.psd1 key and every script param appears in the guide) + Realist review |
 | M6 | **Manual — human only.** Brian follows docs/user-guide.md verbatim on the Pro box, PXE-boots a test laptop. Any step where the guide was unclear or wrong is itself a finding. The loop stops at M5 and writes `AWAITING_HUMAN` to loop-state.json. | Human sign-off |
 
 ## Loop State
