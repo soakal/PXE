@@ -80,7 +80,9 @@ the `New-Service` call will fail with a "binary path not found" error.
 ### Network
 
 - LAN mode (default): your existing DHCP server (e.g., a UDM Pro Max) continues
-  to serve IPs. iVentoy runs in ExternalNet mode and does not conflict.
+  to serve IPs. iVentoy runs in ProxyNet DHCP mode (set in the iVentoy GUI —
+  see the [iVentoy auto-start on boot](#iventoy-auto-start-on-boot)
+  instructions in Setup) and does not conflict.
 - Field mode: bring a dedicated staging switch. iVentoy will hand out IPs
   on the isolated network. No DHCP server on that switch.
 
