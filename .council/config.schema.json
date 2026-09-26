@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Council Loop configuration",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "target_repo",
+    "ceiling",
+    "revise_attempts",
+    "models",
+    "dry_run",
+    "open_pr",
+    "transcripts",
+    "test_commands",
+    "auto_commit",
+    "commit_prefix"
+  ],
+  "properties": {
+    "target_repo": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Absolute target repository path, or '.' for the active project (wherever .council/ was bootstrapped)."
+    },
+    "git_clone_url": {
+      "type": ["string", "null"],
+      "description": "Optional origin URL for reference."
+    },
+    "ceiling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_cycles", "max_minutes"],
+      "properties": {
+        "max_cycles": { "type": "integer", "minimum": 1 },
+        "max_minutes": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "revise_attempts": { "type": "integer", "minimum": 0 },
+    "models": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["arbiter", "engineer", "realist"],
+      "properties": {
+        "arbiter": { "$ref": "#/$defs/modelName" },
+        "engineer": { "$ref": "#/$defs/modelName" },
+        "realist": { "$ref": "#/$defs/modelName" },
+        "security": {
+          "$ref": "#/$defs/modelName",
+          "description": "Model for the Security agent. Optional; defaults to 'sonnet' when omitted."
+        },
+        "verifier": {
+          "$ref": "#/$defs/modelName",
+          "description": "Model for the Verifier (QA) agent. Optional; defaults to 'sonnet' when omitted."
+        }
+      }
+    },
+    "dynamic_agents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "max_parallel", "timeout_minutes"],
+      "description": "Policy for temporary per-cycle specialist agents. Optional; defaults to {enabled: false, max_parallel: 4, timeout_minutes: 10} when omitted -- opt in per goal once a run actually needs a specialist domain.",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "max_parallel": { "type": "integer", "minimum": 1 },
+        "timeout_minutes": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "verifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "max_test_files"],
+      "description": "Policy for the Verifier (QA) role, which authors regression coverage for the cycle's diff. Optional; defaults to {enabled: true, max_test_files: 2} when omitted. Set enabled:false for docs-only or otherwise non-code goals so a cycle does not spend a seat on it.",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "max_test_files": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "brain_events": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Best-effort Brain event emission after a driver run. Optional; defaults to {enabled: false, url: 'http://127.0.0.1:8765'} when omitted -- this is a personal-infra integration, opt in only if you actually run a Brain server.",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "url": { "type": "string", "minLength": 1 }
+      }
+    },
+    "dry_run": {
+      "type": "boolean",
+      "description": "When true, the council plans/reviews but must not modify, stage, commit, push, or open PRs."
+    },
+    "open_pr": {
+      "type": "boolean",
+      "description": "When true, accepted auto-commit cycles print a PR-ready handoff summary. Hosted PR creation requires an external wrapper or user action."
+    },
+    "transcripts": {
+      "type": "boolean",
+      "description": "When true, each cycle writes a readable transcript under .council/state/transcripts/."
+    },
+    "test_commands": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Optional explicit verification commands for the target repo. Empty means auto-discover."
+    },
+    "auto_commit": { "type": "boolean" },
+    "commit_prefix": { "type": "string" }
+  },
+  "$defs": {
+    "modelName": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9._:-]+$",
+      "description": "Claude Code model alias or explicit model slug."
+    }
+  }
+}
