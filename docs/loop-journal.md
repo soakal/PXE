@@ -582,3 +582,73 @@ static review.
 
 `loop-state.json`: `status` still exactly `AWAITING_HUMAN`, unchanged.
 **The physical PXE boot has still NOT been attempted.**
+
+## 2026-09-26 — re-diagnosis: the Secure Boot root cause was never confirmed
+
+**Correction to the record above and to every prior M6 entry in this file.**
+Brian recalled from memory (this was never logged anywhere in this repo)
+that during the original July hardware attempt, the target laptop **did**
+reach iVentoy's PXE boot menu — it just could not load SmartDeploy from
+there. That contradicts the "iVentoy 1.0.37 has no Secure Boot support"
+root-cause theory this whole 1.0.37→1.0.44 effort (this file's prior
+"M6 — follow-up" entry, and `.council/state/goal.md`) was built on:
+
+- This guide's own Secure Boot troubleshooting section (`docs/user-guide.md`,
+  "Secure Boot rejecting the PXE bootloader") describes the actual symptom of
+  a rejection as "shows a Secure Boot violation or simply reboots **without
+  presenting the iVentoy menu**." A rendered menu means the firmware already
+  trusted and executed iVentoy's bootloader — the Secure-Boot-chain-trust
+  step Brian hit was never actually blocked.
+- `docs/runbook.md`'s test plan literally said "Secure Boot OFF → PXE boot"
+  — if Brian followed his own runbook, Secure Boot wasn't even enabled
+  during the July test, which is consistent with reaching the menu.
+- No entry in this file (checked in full, "M6 — Human hardware validation"
+  through "M6 — continued field findings") records an actual observed
+  Secure Boot rejection. Every M6 entry before today ends with some
+  variation of "the physical PXE boot has NOT been attempted" — that
+  language was carried forward from the loop's own record-keeping gap, not
+  from a confirmed observation that the boot failed at the Secure Boot
+  step specifically. The 1.0.37→1.0.44 root cause was a plausible hypothesis
+  from the iVentoy changelog (Secure Boot support added in 1.0.40), applied
+  to a real gap in the version, but never verified against what actually
+  happened on the hardware.
+
+**What "reached the menu, SmartDeploy wouldn't load" more likely means:**
+the failure is downstream of the Secure-Boot-chain-trust step entirely — in
+loading/serving the ISO itself (over HTTP 16000, a different path than the
+TFTP-served menu), not in the firmware trusting iVentoy's bootloader. The
+most likely concrete cause found and fixed today: **the ISO was very likely
+placed at the documented-but-wrong path** (`C:\iVentoy\iso`, a static
+fallback that doesn't exist post-extraction) **instead of the real,
+version-coupled path iVentoy actually scans**
+(`C:\iVentoy\iventoy-<version>\iso`). Every operator-facing instruction for
+where to place the ISO — Prerequisites, First deployment Step 2, the
+five-checks list, Maintenance, and `docs/runbook.md` — had this wrong until
+today; some were caught in this morning's pre-run-hardening pass, the rest
+(Step 2, the five-checks list, Maintenance, runbook.md) were caught in this
+follow-up pass after Brian's recollection prompted a second look. If the ISO
+was never in the folder iVentoy actually scans, "boots into the menu, can't
+load SmartDeploy" is exactly the symptom you'd expect — an empty or wrong
+menu entry, not a Secure Boot violation.
+
+**Other plausible causes not yet ruled out** (flagged for the next real
+hardware attempt, cannot be fixed from a devbox — need an actual boot to
+observe): the UEFI SNP network driver (`snp.efi`) failing to stream the ISO
+reliably on this laptop's NIC (a known class of iVentoy issue independent of
+Secure Boot; the GUI has an `ipxe.efi` alternative); iVentoy's own
+ISO-boot mechanism (virtual-disk injection) not being fully compatible with
+a customized SmartPE build; or, if "couldn't load SmartDeploy" meant SmartPE
+booted but then failed to reach the `SDShare` share, a SmartPE-in-PE network
+driver or credentials issue (see the Troubleshooting "Share unreachable"
+section, since the M4 TinyPXE+`boot.wim` path sidesteps iVentoy's ISO
+mechanism entirely and is worth trying if the ISO-path fix alone doesn't
+resolve it).
+
+**Not fixed by the 1.0.37→1.0.44 / SecureBootMode work**, since that targets
+a pre-menu stage Brian's recollection suggests already worked: the version
+bump and Secure Boot mode support remain worth having (correct, and does no
+harm), but should not be assumed to be *the* fix for what he actually
+experienced. `loop-state.json`: `status` still exactly `AWAITING_HUMAN`,
+unchanged. **The physical PXE boot outcome from this point forward should be
+logged in this file** — the lack of that record is what let an unconfirmed
+hypothesis stand in for a finding for this long.

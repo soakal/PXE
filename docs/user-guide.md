@@ -593,6 +593,13 @@ Set-Location C:\PXEForge\src
 [2026-07-06 09:25:00] [SUCCESS] === All checks PASSED ===
 ```
 
+> **Note (not shown in the transcript above, which predates two later fixes):**
+> the ISO-count check now passes on **any number ≥ 1** ISOs (so a multi-customer
+> iVentoy menu is fine, not just exactly one), and it checks the real,
+> version-coupled ISO directory (`C:\iVentoy\iventoy-<version>\iso`), not the
+> static `C:\iVentoy\iso` shown above. The current PASS line reads
+> `PASS: <count> ISO(s) present in '<real path>'.`
+
 If any check fails, the failing line reads `[ERROR] FAIL: ...` instead, for example:
 
 ```
@@ -608,7 +615,9 @@ The five checks are:
 1. **Ports listening** — UDP 67, 68, 69 and TCP 16000 have active listeners.
 2. **ACL audit** — `D:\SDShare` has a ReadAndExecute Allow ACE for `sddeploy`.
 3. **Service running** — the `iVentoy` service exists and its status is Running.
-4. **ISO present** — exactly one `.iso` file exists in `C:\iVentoy\iso`.
+4. **ISO present** — at least one `.iso` file exists in the real, version-coupled
+   ISO directory (`C:\iVentoy\iventoy-<version>\iso`, not the static
+   `C:\iVentoy\iso` fallback — see Prerequisites).
 5. **Share reachable** — the `SDShare` SMB share exists and its path resolves.
 
 Exit 0 means all checks passed and the appliance is ready. Exit 1 means
@@ -617,15 +626,17 @@ for FAIL lines and see the Troubleshooting section.
 
 ### Step 2: Place the SmartPE ISO
 
-Place exactly one SmartPE ISO in:
+Place your SmartPE ISO in iVentoy's real ISO directory — **not**
+`C:\iVentoy\iso`, but the nested, version-specific folder created by
+extraction:
 
 ```
-C:\iVentoy\iso\
+C:\iVentoy\iventoy-1.0.44\iso\
 ```
 
-Keep exactly one ISO there. iVentoy will serve whichever file it finds.
-`validate.ps1` enforces the one-ISO rule — if there are zero or more than
-one ISO files, check 4 fails.
+(If you're unsure of the exact path, `validate.ps1`'s check 4 log line shows
+the real directory it checked.) One or more ISOs is fine — iVentoy lists
+every ISO it finds in its boot menu, and `validate.ps1` only fails on zero.
 
 ### Step 3: Start the iVentoy service
 
@@ -1010,11 +1021,12 @@ When you upgrade the SmartDeploy console, the version of SmartPE on your
 existing ISO may no longer match. Regenerate the ISO from the SmartDeploy
 console (Deployments > Create Media > SmartPE ISO), then:
 
-1. Delete the old ISO from `C:\iVentoy\iso\`.
-2. Copy the new ISO into `C:\iVentoy\iso\`.
-3. Confirm exactly one `.iso` file is present:
+1. Delete the old ISO from `C:\iVentoy\iventoy-1.0.44\iso\` (the real,
+   version-coupled ISO directory — not the static `C:\iVentoy\iso` fallback).
+2. Copy the new ISO into `C:\iVentoy\iventoy-1.0.44\iso\`.
+3. Confirm the ISO is present:
    ```powershell
-   Get-ChildItem 'C:\iVentoy\iso' -Filter '*.iso'
+   Get-ChildItem 'C:\iVentoy\iventoy-1.0.44\iso' -Filter '*.iso'
    ```
 4. Restart the iVentoy service so it picks up the new file:
    ```powershell
