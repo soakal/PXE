@@ -314,8 +314,8 @@ function Install-IVentoyService {
     if (-not (Test-Path -Path $configDat)) {
         Write-Log ("iVentoy config.dat not found at '$configDat'. " +
             'Run iVentoy interactively once (elevated): launch iVentoy_64.exe, ' +
-            'set Server IP, IP pool, DHCP mode (ProxyNet), UEFI boot file (snp.efi), ' +
-            'click Start to confirm RUNNING, then close. ' +
+            'set Server IP, IP pool, DHCP mode (ProxyNet), Secure Boot mode, ' +
+            'UEFI boot file (snp.efi), click Start to confirm RUNNING, then close. ' +
             'This creates data\config.dat. Re-run setup.ps1 after that.') 'WARN'
         return
     }
@@ -324,6 +324,17 @@ function Install-IVentoyService {
     # effective mode. Log it for operator awareness but do not pass it as a flag.
     Write-Log ("DhcpMode configured as '$dhcpMode' (informational) — effective mode is " +
         'read from config.dat by the service at startup.') 'INFO'
+
+    # SecureBootMode from config.psd1 is informational — same pattern as DhcpMode above.
+    # The effective Secure Boot mode (Standard/ByPass) is set via the iVentoy GUI and
+    # saved in data\config.dat; setup.ps1 only validates and logs the intended value.
+    $secureBootMode = $script:Config.IVentoy.SecureBootMode
+    if ($secureBootMode -notin @('Standard', 'ByPass', 'Disabled')) {
+        throw (("PREREQ:BAD_INPUT: Invalid SecureBootMode '{0}' in config.psd1 — must be " +
+            "'Standard', 'ByPass', or 'Disabled'.") -f $secureBootMode)
+    }
+    Write-Log ("SecureBootMode configured as '$secureBootMode' (informational) — effective " +
+        'mode is set via the iVentoy GUI and read from config.dat by the service at startup.') 'INFO'
 
     if ($PSCmdlet.ShouldProcess($serviceName, 'Register iVentoy Windows service')) {
         New-Service -Name $serviceName `

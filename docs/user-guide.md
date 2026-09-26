@@ -142,7 +142,7 @@ This is the LAN-mode default. For Field mode see the Setup section.
 [2026-07-06 09:15:02] [INFO] DC standby disabled (timeout=0).
 [2026-07-06 09:15:02] [INFO] Hibernate disabled.
 [2026-07-06 09:15:03] [INFO] iVentoy extracted to 'C:\iVentoy'.
-[2026-07-06 09:15:03] [WARN] iVentoy config.dat not found at 'C:\iVentoy\iventoy-1.0.44\data\config.dat'. Run iVentoy interactively once (elevated): launch iVentoy_64.exe, set Server IP, IP pool, DHCP mode (ProxyNet), UEFI boot file (snp.efi), click Start to confirm RUNNING, then close. This creates data\config.dat. Re-run setup.ps1 after that.
+[2026-07-06 09:15:03] [WARN] iVentoy config.dat not found at 'C:\iVentoy\iventoy-1.0.44\data\config.dat'. Run iVentoy interactively once (elevated): launch iVentoy_64.exe, set Server IP, IP pool, DHCP mode (ProxyNet), Secure Boot mode, UEFI boot file (snp.efi), click Start to confirm RUNNING, then close. This creates data\config.dat. Re-run setup.ps1 after that.
 [2026-07-06 09:15:03] [SUCCESS] === Completed successfully ===
 ```
 
@@ -164,6 +164,7 @@ Or on the second invocation before any service has been registered but after
 ```
 [2026-07-06 09:16:00] [INFO] iVentoy install root 'C:\iVentoy' already populated — skipping extraction.
 [2026-07-06 09:16:00] [INFO] DhcpMode configured as 'ExternalNet' (informational) — effective mode is read from config.dat by the service at startup.
+[2026-07-06 09:16:00] [INFO] SecureBootMode configured as 'Standard' (informational) — effective mode is set via the iVentoy GUI and read from config.dat by the service at startup.
 [2026-07-06 09:16:00] [INFO] iVentoy service 'iVentoy' registered (-Service -R, start=Automatic).
 [2026-07-06 09:16:00] [SUCCESS] === Completed successfully ===
 ```
@@ -360,6 +361,7 @@ this file.
 | `HttpPort` | TCP port for iVentoy's HTTP API | `16000` | If another service binds 16000 |
 | `UiPort` | TCP port for iVentoy's management UI (loopback-only firewall rule) | `26000` | If another service binds 26000 |
 | `DhcpMode` | iVentoy DHCP mode (informational — logged during setup; the effective mode is saved in `data\config.dat` via the iVentoy GUI at interactive setup time) | `ExternalNet` | Does not control the service binary flags (which are always `-Service -R`). Change the actual DHCP mode via the iVentoy GUI: use ProxyNet for LAN operation, DHCPServer for an isolated Field switch. |
+| `SecureBootMode` | Intended iVentoy Secure Boot mode (informational — validated and logged during setup; must be `Standard`, `ByPass`, or `Disabled`, else setup.ps1 exits with a BAD_INPUT error). The effective mode is saved in `data\config.dat` via the iVentoy GUI at interactive setup time | `Standard` | Set to `ByPass` if Standard mode fails Secure Boot validation (requires one-time MOK enrollment per laptop, see Step 4). `Disabled` if no target laptops have Secure Boot enabled. Change the actual mode via the iVentoy GUI — this key does not switch it. |
 | `ServiceName` | Windows service name for iVentoy | `iVentoy` | Rarely — must match what iVentoy registers |
 
 #### Share section
@@ -593,8 +595,11 @@ into iVentoy's boot environment, which then presents the ISO menu.
 If the target laptop has Secure Boot enabled, iVentoy must serve a
 Microsoft-signed bootloader. iVentoy added Secure Boot support in 1.0.40
 (2026-09-03); this repo targets 1.0.44 (see Prerequisites), which includes it.
-iVentoy exposes two Secure Boot modes, configured directly in iVentoy's own
-settings (not by this repo's scripts):
+iVentoy exposes two Secure Boot modes. The mode you intend to use is recorded
+in `config.psd1`'s `SecureBootMode` key and validated/logged by `setup.ps1`
+(see Configure — IVentoy section); the EFFECTIVE setting is still applied in
+iVentoy's own GUI and saved to `data\config.dat` — `setup.ps1` checks and logs
+the intended value, it does not switch the actual iVentoy setting:
 
 - **Standard** — serves a Microsoft-signed boot chain. No client-side action
   is needed; recommended starting mode.

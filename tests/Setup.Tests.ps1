@@ -92,6 +92,8 @@ Describe 'Scaffold contract' {
         $cfg.IVentoy.Version   | Should -Be '1.0.44'
         $cfg.Share.Path        | Should -Be 'D:\SDShare'
         $cfg.IVentoy.DhcpMode  | Should -BeIn @('ExternalNet', 'DHCPServer')
+        $cfg.IVentoy.SecureBootMode | Should -BeIn @('Standard', 'ByPass', 'Disabled')
+        $cfg.IVentoy.SecureBootMode | Should -Be 'Standard'
     }
     It 'no hardcoded IP addresses in scripts outside config.psd1' {
         Get-ChildItem (Join-Path $PSScriptRoot '..\src') -Filter *.ps1 | ForEach-Object {
@@ -333,5 +335,21 @@ Describe 'Install-IVentoyService' {
                 $BinaryPathName -like '*-Service -R*' -and
                 $BinaryPathName -notlike '*/mode*'
             }
+    }
+
+    It 'logs SecureBootMode as informational' {
+        Install-IVentoyService
+        Should -Invoke Add-Content -Scope It -ParameterFilter { $Value -like '*SecureBootMode*' }
+    }
+
+    It 'throws BAD_INPUT and calls New-Service 0 times when SecureBootMode is invalid' {
+        $original = $script:Config.IVentoy.SecureBootMode
+        $script:Config.IVentoy.SecureBootMode = 'Bogus'
+        try {
+            { Install-IVentoyService } | Should -Throw "*PREREQ:BAD_INPUT*'Bogus'*"
+            Should -Invoke New-Service -Exactly 0 -Scope It
+        } finally {
+            $script:Config.IVentoy.SecureBootMode = $original
+        }
     }
 }

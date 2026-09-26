@@ -9,6 +9,7 @@
         HttpPort    = 16000
         UiPort      = 26000          # firewall rule scoped to loopback only
         DhcpMode    = 'ExternalNet'  # LAN default; 'DHCPServer' for isolated field mode
+        SecureBootMode = 'Standard'  # 'Standard' (signed chain) | 'ByPass' (MOK enrollment) | 'Disabled'
         ServiceName = 'iVentoy'
     }
 
