@@ -695,8 +695,11 @@ Get-NetUDPEndpoint -LocalPort 67 -ErrorAction SilentlyContinue
   `DHCPServer` mode in the iVentoy GUI (saved to `config.dat`), then restart the
   service. If reinstalling the service: `sc.exe delete iVentoy` then re-run
   `.\setup.ps1` (after creating a new `config.dat` via interactive setup).
-- If iVentoy DHCP cannot coexist with your network, use the TinyPXE fallback:
-  `.\pxe-fallback.ps1 -Mode Field`
+- If iVentoy DHCP cannot coexist with your network, use the TinyPXE fallback
+  in its default Lan/proxy DHCP mode, which coexists with an existing DHCP
+  server (do not use `-Mode Field` here — that starts a full DHCP server and
+  will conflict with your network's existing DHCP server):
+  `.\pxe-fallback.ps1`
 
 ### Share unreachable — SmartDeploy cannot see images
 
@@ -877,9 +880,15 @@ Test-Path 'C:\TinyPXE\pxesrv.exe'   # must return True
 
 **Step 2 — Configure the fallback:**
 
+On the production office network, run the fallback in its default Lan/proxy
+DHCP mode (no `-Mode` flag). Only use `-Mode Field` on an isolated staging
+switch with no other DHCP server present: Field mode makes TinyPXE run a
+full DHCP server, which would conflict with the office's existing DHCP
+server (the UDM Pro Max) if run on the production LAN.
+
 ```powershell
 Set-Location C:\PXEForge\src
-.\pxe-fallback.ps1 -Mode Field
+.\pxe-fallback.ps1
 ```
 
 This copies `bootmgfw.efi` and `boot.sdi` from the host Windows installation
@@ -913,11 +922,29 @@ Test-Path 'C:\TinyPXE\files\Boot\boot.wim'   # must return True
 
 **Step 4 — Start the service:**
 
+`iVentoy` and `TinyPXE` both bind UDP ports 67/69 and cannot run at the same
+time; stop and disable `iVentoy` before starting `TinyPXE`:
+
 ```powershell
+Stop-Service -Name 'iVentoy'
+Set-Service -Name 'iVentoy' -StartupType Manual
+Get-Service -Name 'iVentoy'   # confirm Status is Stopped before continuing
 Start-Service -Name 'TinyPXE'
 ```
 
+If `iVentoy` does not show `Stopped`, do not run `Start-Service -Name 'TinyPXE'` —
+it will fail to bind ports 67/69 while `iVentoy` still holds them.
+
 Then re-attempt PXE boot on the target.
+
+To switch back to `iVentoy` afterward:
+
+```powershell
+Stop-Service -Name 'TinyPXE'
+Set-Service -Name 'TinyPXE' -StartupType Manual
+Set-Service -Name 'iVentoy' -StartupType Automatic
+Start-Service -Name 'iVentoy'
+```
 
 ---
 
