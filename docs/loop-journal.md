@@ -423,3 +423,85 @@ Invoke-ScriptAnalyzer -Path src -Recurse -Severity Error
 
 On-box install (service registration with the corrected flags) remains a
 manual operator step per the AWAITING_HUMAN status of M6.
+
+---
+
+## M6 — follow-up: iVentoy 1.0.44 + Secure Boot support (2026-09-26)
+
+**Work item:** Bump the repo's target iVentoy version, correct a stale Secure
+Boot claim, add a `SecureBootMode` config key, document cert rotation and
+licensing, and reconcile the loop journal/state.
+
+### Root cause (stale version + false Secure Boot claim, no mock could catch)
+
+The repo targeted iVentoy 1.0.37 throughout config, tests, and docs. 1.0.37
+has no Secure Boot support at all — any prior doc language implying Secure
+Boot was already handled by this repo's iVentoy path was wrong. Secure Boot
+support was added upstream in iVentoy 1.0.40 (2026-09-03); 1.0.44 is the
+current stable release (2026-09-24). Neither Pester nor PSSA can catch a
+stale version string or a false capability claim in prose — this required a
+manual literature check against the upstream iVentoy release notes.
+
+### Changes (cycles 1-4, files changed, no host commands run)
+
+**Cycle 1 (cfa9ba4)** — bumped iVentoy `1.0.37` → `1.0.44` across
+`CLAUDE.md`, `docs/user-guide.md`, `src/config.psd1`, `tests/Setup.Tests.ps1`.
+
+**Cycle 2 (072f13e)** — removed the false "Secure Boot already handled"
+implication; `docs/user-guide.md` now states 1.0.37 had no Secure Boot
+support, that it arrived in 1.0.40 (2026-09-03), and that this repo's target
+1.0.44 includes it. Explained the two iVentoy Secure Boot modes, **Standard**
+(Microsoft-signed chain, no client action) and **ByPass** (iVentoy-signed
+chain, requires a one-time MOK enrollment per laptop, and once switched to
+ByPass every subsequent laptop — including ones that worked under Standard —
+needs the enrollment too, since it is a server-wide setting). Added a
+Troubleshooting **certificate rotation note**: Microsoft is migrating Secure
+Boot signing from the 2011 certificates to the 2023 certificates, the Windows
+PCA 2011 certificate expires 2026-10-19, and if the host's `bootmgfw.efi` and
+the target laptop's firmware trust database are on different certificate
+generations, the TinyPXE fallback can be rejected the same way the primary
+iVentoy path was — the OEM firmware/BIOS update is the usual fix.
+
+**Cycle 3 (10033d2)** — added `IVentoy.SecureBootMode` to `src/config.psd1`
+(default `Standard`; accepts `Standard`, `ByPass`, or `Disabled`).
+`src/setup.ps1` validates the value at preflight (invalid value is a
+`BAD_INPUT` → exit 2) and logs it as informational during service
+registration, mirroring the existing `DhcpMode` pattern — the effective mode
+is still set in the iVentoy GUI and saved to `data\config.dat`; the config
+key does not switch it. `tests/Setup.Tests.ps1` gained coverage for the
+valid/invalid values. `docs/user-guide.md`'s Configure table and Step 4
+(Secure Boot section) updated to match.
+
+**Cycle 4 (this entry)** — `docs/user-guide.md`: added a licensing note in
+the `### iVentoy 1.0.44` Prerequisites subsection — the free iVentoy edition
+is for non-commercial use only and capped at 20 clients; this appliance
+images customer machines (a business use, per the `Sync.Source` business
+image share in `src\config.psd1`), so iVentoy Pro ($49, from the official
+iventoy.com site) is very likely required; Brian must confirm current
+licensing terms and purchase before production use — no license is assumed
+held yet. `loop-state.json`: `workItem` rewritten to summarize the full
+1.0.37→1.0.44 run (version bump, corrected Secure Boot claim, Standard/ByPass
+explanation, `SecureBootMode` key, cert-rotation note, licensing note) while
+preserving the still-open human items (re-run `setup.ps1 -ConfigPath`, place
+ISOs, validate, PXE-boot a Secure-Boot-enabled test laptop and sign off) and
+Findings A and D; `milestone` (`M6`), `iteration` (`0`), and `status`
+(`AWAITING_HUMAN`) left unchanged. `docs/loop-journal.md`: this entry.
+
+### Gates (run by Arbiter/Engineer — no host-mutating calls, no git)
+
+```powershell
+Invoke-Pester -CI
+Invoke-ScriptAnalyzer -Path src -Recurse -Severity Error
+```
+
+`Invoke-ScriptAnalyzer -Path src -Recurse -Severity Error` was run for real
+and returned no findings. `Invoke-Pester` could **not** be run this session —
+this devbox is Linux and the test suite dot-sources scripts that assume a
+`C:` drive; this is a pre-existing environment limitation, not something
+introduced by this run. `Invoke-ScriptAnalyzer` is the gate actually used in
+this environment.
+
+**The physical PXE boot has NOT been attempted.** No hardware step in M6 —
+service registration, ISO placement, `validate.ps1`, or PXE-booting a
+Secure-Boot-enabled test laptop — has been performed. Status remains
+`AWAITING_HUMAN` pending Brian's manual run and sign-off.

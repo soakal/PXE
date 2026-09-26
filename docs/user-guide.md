@@ -42,6 +42,15 @@ This is the `IVentoy.ZipPath` value from `src\config.psd1`. If the file is
 missing when setup runs, setup logs a warning and skips iVentoy extraction
 (exit 0 — not fatal), but the iVentoy service will not be installed.
 
+**Licensing note (confirm before production use):** the free iVentoy edition
+is licensed for non-commercial use only and is capped at 20 clients. This
+appliance boots customer machines to image them for a business — see the
+`Sync.Source` business image share configured in `src\config.psd1` — which is
+commercial use. Brian must confirm the current iVentoy licensing terms at
+iventoy.com and, if they still apply as described here, purchase iVentoy Pro
+($49, from the official iventoy.com site only) before relying on this
+appliance in production. Do not assume a Pro license is already held.
+
 ### SmartDeploy SmartPE ISO
 
 You need a SmartPE ISO generated from the SmartDeploy console. Exactly one
