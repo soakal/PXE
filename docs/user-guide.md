@@ -755,8 +755,9 @@ Get-EventLog -LogName System -Source 'Service Control Manager' -Newest 20 |
 **Fix:**
 
 - If the binary path does not exist (iVentoy was not extracted), confirm
-  `C:\iVentoy\iventoy.exe` (or the exe found during extraction) is present.
-  If missing, delete the service (`sc.exe delete iVentoy`) and re-run
+  `C:\iVentoy\iventoy-1.0.44\iVentoy_64.exe` (or the exe found during
+  extraction) is present. If missing, delete the service
+  (`sc.exe delete iVentoy`) and re-run
   `.\setup.ps1` with the zip in place.
 - If TinyPXE is not installed at `C:\TinyPXE\pxesrv.exe`, download the
   TinyPXE Server zip from erwan.labalec.fr/tinypxe (by Erwan Labalec) and
@@ -844,7 +845,10 @@ Get-NetTCPConnection -LocalPort 16000 -State Listen |
 **Symptom:** Target boots from network, shows a Secure Boot violation or
 simply reboots without presenting the iVentoy menu.
 
-**Fix:** Use the TinyPXE fallback, which serves `bootmgfw.efi` — the
+**Fix:** If iVentoy is still in Standard mode, first try switching it to
+ByPass mode per First deployment Step 4 (one-time MOK enrollment per
+laptop); use the TinyPXE fallback if ByPass also fails or MOK enrollment
+isn't acceptable. TinyPXE serves `bootmgfw.efi` — the
 Microsoft-signed Windows boot manager, already present on the host at
 `C:\Windows\Boot\EFI\bootmgfw.efi`. Microsoft's key is in most UEFI Secure
 Boot trust databases, so key enrollment is usually not needed — but this
